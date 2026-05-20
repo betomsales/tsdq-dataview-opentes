@@ -22,6 +22,10 @@ from components.tabelas import (
     render_tabela_dataset,
     render_codigo_variavel
 )
+from components.cards_qee import (
+    render_cards_qee
+)
+
 
 st.set_page_config(
     page_title="Análise Elétrica",
@@ -35,6 +39,7 @@ Módulo para análise de resultados
 provenientes de simulações elétricas.
 """)
 
+render_cards_qee()
 
 uploaded_file = render_upload(
     session_key="arquivo_eletrico",
