@@ -1,5 +1,5 @@
 import streamlit as st
-
+from utils.escalas import auto_scale
 from utils.qee import (
 
     identificar_variaveis_qee,
@@ -46,6 +46,25 @@ def card_qee(
             unidade = info.get(
                 "unidade"
             )
+
+            if (
+                valor is not None
+                and unidade in [
+                    "W",
+                    "Var",
+                    "V",
+                    "A"
+                ]
+            ):
+
+                (
+                    valor,
+                    unidade,
+                    _
+                ) = auto_scale(
+                    valor,
+                    unidade
+                )
 
             if valor is None:
 
@@ -203,6 +222,15 @@ def render_cards_qee(
         )
     )
 
+    dados_potencia_gerador = (
+        montar_card_fases(
+            df,
+            variaveis_qee[
+                "potencia_gerador"
+            ]
+        )
+    )
+
     dados_fp = (
         montar_card_fases(
             df,
@@ -287,6 +315,12 @@ def render_cards_qee(
         )
 
     with col3:
+
+        card_qee(
+            "Potência do Gerador",
+            dados_potencia_gerador,
+            "#c0392b"
+        )
 
         card_qee(
             "Potência Ativa",

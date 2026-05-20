@@ -6,13 +6,15 @@
     "prefixo": "V",
     "tem_fase": true
   },
+
   "Corrente (A)": {
     "_instrucao_equipe": "Aceita formato nativo do OpenDSS ou limpo. Padrão: (Line-){NOME}-I{FASE}_A",
     "_exemplo": "Line-LT_500_XINGU-I2_A ou LT_500_XINGU-I2_A",
-    "regex": "(?:Line-)?(.+?)-[iI](\\d+)_A",
+    "regex": "(?:Line-)?(.+?)-[iI](\\d+)_(A|kA)",
     "prefixo": "I",
     "tem_fase": true
   },
+
   "Ângulo de Corrente (°)": {
     "_instrucao_equipe": "Aceita formato nativo do OpenDSS ou limpo. Padrão: (Line-){NOME}-I{FASE}_ang",
     "_exemplo": "Line-LT_500_XINGU-I2_ang ou LT_500_XINGU-I2_ang",
@@ -20,6 +22,7 @@
     "prefixo": "I",
     "tem_fase": true
   },
+
   "Taps dos Reguladores": {
     "_instrucao_equipe": "Aceita formato nativo do OpenDSS ou limpo. Padrão: (RegControl-){NOME}-tap",
     "_exemplo": "RegControl-creg1a-tap ou creg1a-tap",
@@ -27,13 +30,15 @@
     "prefixo": "Tap",
     "tem_fase": false
   },
+
   "Potência do Gerador (MW)": {
     "_instrucao_equipe": "Aceita formato nativo do OpenDSS ou limpo. Padrão: (Generator-){NOME}-P_MW",
     "_exemplo": "Generator-Gen_0-P_MW ou Gen_0-P_MW",
-    "regex": "(?:Generator-)(.+?)-[pP]_MW",
+    "regex": "(?:Generator-)?(.+?)-[pP]_(MW|kW|W)",
     "prefixo": "P",
     "tem_fase": false
   },
+
   "Irradiância Solar (DNI)": {
     "_instrucao_equipe": "Padrão: {NOME}-DNI",
     "_exemplo": "Sensor_01-DNI ou CSV-0.csv-0-DNI",
@@ -41,27 +46,31 @@
     "prefixo": "DNI",
     "tem_fase": false
   },
+
   "Potência Fotovoltaica": {
-    "_instrucao_equipe": "Padrão: {NOME}-P_gen",
-    "_exemplo": "PV-0.PV_0-P_gen ou Usina_Solar-P_gen",
-    "regex": "(.+?)-[pP]_gen_(W|kW|MW)",
+    "_instrucao_equipe": "Padrão: {NOME}-P_gen_MW",
+    "_exemplo": "PV-0.PV_0-P_gen_MW ou Usina_Solar-P_gen_kW",
+    "regex": "(.+?)-[pP]_gen_(MW|kW|W)",
     "prefixo": "P",
     "tem_fase": false
   },
+
   "Potência Ativa da Rede (MW)": {
     "_instrucao_equipe": "Prefixo Grid opcional. Padrão: (Grid-{ID}-){NOME}-P_MW",
     "_exemplo": "Grid-0.0-LV2.101 Bus 19-P_MW ou LV2.101 Bus 19-P_MW",
-    "regex": "(?:Grid-[\\w.-]+-)?(.+?)-[pP]_MW",
+    "regex": "(?:Grid-[\\w.-]+-)?(.+?)-[pP]_(MW|kW|W)",
     "prefixo": "P",
     "tem_fase": false
   },
-  "Potência Reativa da Rede (Mvar)": {
-    "_instrucao_equipe": "Prefixo Grid opcional. Padrão: (Grid-{ID}-){NOME}-Q_Mvar",
-    "_exemplo": "Grid-0.0-LV2.101 Bus 28-q_Mvar ou LV2.101 Bus 28-Q_Mvar",
-    "regex": "(?:Grid-[\\w.-]+-)?(.+?)-[qQ]_Mvar",
+
+  "Potência Reativa da Rede (MVar)": {
+    "_instrucao_equipe": "Prefixo Grid opcional. Padrão: (Grid-{ID}-){NOME}-Q_MVar",
+    "_exemplo": "Grid-0.0-LV2.101 Bus 28-Q_MVar ou LV2.101 Bus 28-q_MVar",
+    "regex": "(?:Grid-[\\w.-]+-)?(.+?)-[qQ]_(MVar|kVar|Var)",
     "prefixo": "Q",
     "tem_fase": false
   },
+
   "_Configuracoes_Geograficas": {
     "_instrucao_equipe": "Defina as colunas exatas que o seu ficheiro de coordenadas vai ter",
     "coluna_elemento": "Barra",

@@ -20,6 +20,8 @@ def identificar_variaveis_qee(
 
         "potencia_fv": [],
 
+        "potencia_gerador": [],
+
         "fp": [],
 
         "frequencia": []
@@ -90,6 +92,18 @@ def identificar_variaveis_qee(
                     ].append(
                         variavel
                     )
+
+                elif (
+                    "gerador"
+                    in nome_tipo
+                ):
+
+                    resultado[
+                        "potencia_gerador"
+                    ].append(
+                        variavel
+                    )
+
                 elif (
                     "fator de potência"
                     in nome_tipo
@@ -160,6 +174,7 @@ def montar_card_fases(
         }
 
     return resultado
+
 
 def calcular_desequilibrio_global(
     dados_tensao
