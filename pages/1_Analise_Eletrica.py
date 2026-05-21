@@ -257,10 +257,6 @@ if uploaded_file is not None:
         render_codigo_variavel(
             variavel_info
         )
-    
-    st.write(type(variavel_info))
-
-    st.write(variavel_info)
 
     variavel_qee = variavel_info
 

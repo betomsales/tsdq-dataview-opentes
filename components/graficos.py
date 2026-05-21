@@ -55,6 +55,17 @@ def render_grafico_individual(
             annotation_text="Limite Inf. PRODIST"
         )
 
+        fig.add_hline(
+
+            y=limites["critico_min"],
+
+            line_dash="dot",
+
+            line_color="darkred",
+
+            annotation_text="Limite Crítico PRODIST"
+        )
+
     fig.update_layout(
 
         xaxis_title="Tempo",
@@ -128,6 +139,17 @@ def render_grafico_multiserie(
             line_color="orange",
 
             annotation_text="Limite Inf. PRODIST"
+        )
+
+        fig_multiserie.add_hline(
+
+            y=limites["critico_min"],
+
+            line_dash="dot",
+
+            line_color="darkred",
+
+            annotation_text="Limite Crítico PRODIST"
         )
 
     fig_multiserie.update_layout(

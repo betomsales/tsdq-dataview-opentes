@@ -215,3 +215,151 @@ def calcular_desequilibrio_global(
     ) * 100
 
     return desequilibrio
+
+def classificar_tensao_prodist(
+    valor
+):
+    """
+    Classificação PRODIST.
+    """
+
+    if valor is None:
+
+        return None
+
+    if 0.93 <= valor <= 1.05:
+
+        return "adequado"
+
+    elif (
+        0.90 <= valor < 0.93
+        or
+        1.05 < valor <= 1.08
+    ):
+
+        return "precario"
+
+    else:
+
+        return "critico"
+
+
+def calcular_drp_drc_global(
+    df,
+    variaveis_tensao
+):
+    """
+    Calcula DRP e DRC globais.
+    """
+
+    total = 0
+
+    precario = 0
+
+    critico = 0
+
+    for variavel in variaveis_tensao:
+
+        coluna = variavel[
+            "coluna_original"
+        ]
+
+        if coluna not in df.columns:
+            continue
+
+        serie = pd.to_numeric(
+
+            df[coluna],
+
+            errors="coerce"
+        )
+
+        for valor in serie:
+
+            if pd.isna(valor):
+                continue
+
+            classificacao = (
+                classificar_tensao_prodist(
+                    valor
+                )
+            )
+
+            total += 1
+
+            if (
+                classificacao
+                == "precario"
+            ):
+
+                precario += 1
+
+            elif (
+                classificacao
+                == "critico"
+            ):
+
+                critico += 1
+
+    if total == 0:
+
+        return None, None
+
+    drp = (
+        precario
+        / total
+    ) * 100
+
+    drc = (
+        critico
+        / total
+    ) * 100
+
+    return drp, drc
+
+def calcular_indicadores_temporais(
+    df,
+    variaveis
+):
+    """
+    Calcula indicadores temporais.
+    """
+
+    valores = []
+
+    for variavel in variaveis:
+
+        coluna = variavel[
+            "coluna_original"
+        ]
+
+        if coluna not in df.columns:
+            continue
+
+        serie = pd.to_numeric(
+
+            df[coluna],
+
+            errors="coerce"
+        ).dropna()
+
+        valores.extend(
+            serie.tolist()
+        )
+
+    if len(valores) == 0:
+
+        return None
+
+    serie = pd.Series(valores)
+
+    return {
+
+        "minimo": serie.min(),
+
+        "maximo": serie.max(),
+
+        "media": serie.mean(),
+
+        "desvio": serie.std()
+    }

@@ -1,15 +1,15 @@
 def obter_limites_prodist():
     """
-    Limites PRODIST para tensão em pu.
+    Limites PRODIST MT.
     """
 
     return {
 
-        "adequado_min": 0.92,
-        "adequado_max": 1.05,
+        "adequado_min": 0.93,
 
-        "critico_min": 0.87,
-        "critico_max": 1.06
+        "critico_min": 0.90,
+
+        "adequado_max": 1.05
     }
 
 

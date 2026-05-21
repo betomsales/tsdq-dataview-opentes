@@ -6,7 +6,11 @@ from utils.qee import (
 
     montar_card_fases,
 
-    calcular_desequilibrio_global
+    calcular_desequilibrio_global,
+
+    calcular_drp_drc_global,
+
+    calcular_indicadores_temporais
 )
 
 
@@ -125,7 +129,7 @@ def card_qee(
 
 def render_cards_qee(
     df,
-    estrutura
+    estrutura,
 ):
     """
     Renderiza painel QEE.
@@ -255,13 +259,36 @@ def render_cards_qee(
         )
     )
 
-    st.subheader(
-        "Grandezas"
+    drp, drc = (
+        calcular_drp_drc_global(
+
+            df,
+
+            variaveis_tensao_filtradas
+        )
     )
 
-    col1, col2, col3 = st.columns(3)
+    indicadores_temporais = (
+        calcular_indicadores_temporais(
 
-    with col1:
+            df,
+
+            variaveis_tensao_filtradas
+        )
+    )
+
+    st.subheader(
+        "Barra Monitorada"
+    )
+
+    st.caption(
+        f"Elemento monitorado: "
+        f"{tensao_referencia}"
+    )
+
+    linha1_col1, linha1_col2 = st.columns(2)
+
+    with linha1_col1:
 
         card_qee(
             "Tensão",
@@ -269,32 +296,11 @@ def render_cards_qee(
             "#f1c40f"
         )
 
-        card_qee(
-            "DRP",
-            None
-        )
-
-        card_qee(
-            "Flutuação",
-            None
-        )
-
-    with col2:
-
-        card_qee(
-            "Corrente",
-            dados_corrente,
-            "#3498db"
-        )
-
-        card_qee(
-            "DRC",
-            None
-        )
+    with linha1_col2:
 
         card_qee(
 
-            "Desequilíbrio",
+            "Desequilíbrio (%) - Simplificado",
 
             (
                 {
@@ -308,19 +314,164 @@ def render_cards_qee(
 
                 if desequilibrio is not None
 
-                else None
+                else {
+                    "Sistema": {
+
+                        "valor": None,
+
+                        "unidade": ""
+                    }
+                }
             ),
 
             "#9b59b6"
         )
 
-    with col3:
+    linha2_col1, linha2_col2 = st.columns(2)
+
+    with linha2_col1:
 
         card_qee(
-            "Potência do Gerador",
-            dados_potencia_gerador,
-            "#c0392b"
+
+            "DRP",
+
+            (
+                {
+                    "Global": {
+
+                        "valor": drp,
+
+                        "unidade": "%"
+                    }
+                }
+
+                if drp is not None
+
+                else None
+            ),
+
+            "#2ecc71"
         )
+
+    with linha2_col2:
+
+        card_qee(
+
+            "DRC",
+
+            (
+                {
+                    "Global": {
+
+                        "valor": drc,
+
+                        "unidade": "%"
+                    }
+                }
+
+                if drc is not None
+
+                else None
+            ),
+
+            "#e91e63"
+        )
+
+    if indicadores_temporais:
+
+        st.subheader(
+            "Indicadores Temporais"
+        )
+
+        col_t1, col_t2, col_t3, col_t4 = st.columns(4)
+
+        with col_t1:
+
+            card_qee(
+
+                "Tensão Mínima",
+
+                {
+                    "Global": {
+
+                        "valor": indicadores_temporais[
+                            "minimo"
+                        ],
+
+                        "unidade": "pu"
+                    }
+                },
+
+                "#2980b9"
+            )
+
+        with col_t2:
+
+            card_qee(
+
+                "Tensão Máxima",
+
+                {
+                    "Global": {
+
+                        "valor": indicadores_temporais[
+                            "maximo"
+                        ],
+
+                        "unidade": "pu"
+                    }
+                },
+
+                "#27ae60"
+            )
+
+        with col_t3:
+
+            card_qee(
+
+                "Tensão Média",
+
+                {
+                    "Global": {
+
+                        "valor": indicadores_temporais[
+                            "media"
+                        ],
+
+                        "unidade": "pu"
+                    }
+                },
+
+                "#f39c12"
+            )
+
+        with col_t4:
+
+            card_qee(
+
+                "Desvio Padrão",
+
+                {
+                    "Global": {
+
+                        "valor": indicadores_temporais[
+                            "desvio"
+                        ],
+
+                        "unidade": "pu"
+                    }
+                },
+
+                "#8e44ad"
+            )
+
+    st.subheader(
+        "Indicadores Globais do Sistema"
+    )
+
+    col_g1, col_g2, col_g3 = st.columns(3)
+
+    with col_g1:
 
         card_qee(
             "Potência Ativa",
@@ -334,11 +485,21 @@ def render_cards_qee(
             "#16a085"
         )
 
+    with col_g2:
+
         card_qee(
             "Potência FV",
             dados_potencia_fv,
             "#27ae60"
         )
+
+        card_qee(
+            "Potência do Gerador",
+            dados_potencia_gerador,
+            "#c0392b"
+        )
+
+    with col_g3:
 
         card_qee(
             "Fator de Potência",
