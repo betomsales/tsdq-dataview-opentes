@@ -1,52 +1,137 @@
 import numpy as np
 
-
 def auto_scale(
-    value,
-    unit
+    valor,
+    unidade
 ):
     """
-    Define escala automática SI.
+    Realiza escalonamento automático.
     """
 
-    if value == 0:
-        return 0, unit, 1
+    if valor is None:
 
-    exp = int(
-        np.floor(
-            np.log10(abs(value)) / 3
-        ) * 3
-    )
+        return (
+            valor,
+            unidade,
+            1
+        )
 
-    scale_map = {
+    unidades_base = {
 
-        -3: ("m", 1e-3),
+        "W": [
 
-        0: ("", 1),
+            ("W", 1),
 
-        3: ("k", 1e3),
+            ("kW", 1e3),
 
-        6: ("M", 1e6),
+            ("MW", 1e6),
 
-        9: ("G", 1e9),
+            ("GW", 1e9)
+        ],
+
+        "Var": [
+
+            ("Var", 1),
+
+            ("kVar", 1e3),
+
+            ("MVar", 1e6)
+        ],
+
+        "VA": [
+
+            ("VA", 1),
+
+            ("kVA", 1e3),
+
+            ("MVA", 1e6)
+        ],
+
+        "V": [
+
+            ("V", 1),
+
+            ("kV", 1e3)
+        ],
+
+        "A": [
+
+            ("A", 1),
+
+            ("kA", 1e3)
+        ]
     }
 
-    exp = max(
-        min(exp, 9),
-        -3
+    # NÃO escalar unidades
+    # que já possuem prefixo
+
+    unidades_bloqueadas = [
+
+        "kW",
+        "MW",
+        "GW",
+
+        "kVar",
+        "MVar",
+
+        "kVA",
+        "MVA",
+
+        "kV",
+        "kA"
+    ]
+
+    if unidade in unidades_bloqueadas:
+
+        return (
+            valor,
+            unidade,
+            1
+        )
+
+    if unidade not in unidades_base:
+
+        return (
+            valor,
+            unidade,
+            1
+        )
+
+    valor_abs = abs(valor)
+
+    escala_escolhida = (
+        unidade,
+        1
     )
 
-    prefix, factor = scale_map.get(
-        exp,
-        ("", 1)
-    )
+    for nome, fator in unidades_base[
+        unidade
+    ]:
+
+        if valor_abs >= fator:
+
+            escala_escolhida = (
+                nome,
+                fator
+            )
 
     unidade_final = (
-        prefix + unit
+        escala_escolhida[0]
+    )
+
+    fator_final = (
+        escala_escolhida[1]
+    )
+
+    valor_final = (
+        valor / fator_final
     )
 
     return (
-        value / factor,
+
+        valor_final,
+
         unidade_final,
-        factor
+
+        fator_final
     )

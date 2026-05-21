@@ -9,10 +9,6 @@ from utils.processamento import (
     preparar_multiplas_series
 )
 from components.uploader import render_upload
-from utils.prodist import (
-    obter_limites_prodist
-)
-from utils.escalas import auto_scale
 from components.graficos import (
     render_grafico_individual,
     render_grafico_multiserie
@@ -153,49 +149,17 @@ if uploaded_file is not None:
 
         df_plot = dados_plot["df_plot"]
 
-        valor_maximo = (
-            df_plot["Valor"]
-            .abs()
-            .max()
-        )
+       
+       
+        tipo_variavel = variavel_info[
+            "tipo"
+        ]
 
-        unidade_original = (
+        unidade_final = (
             variavel_info.get(
                 "unidade_detectada"
             )
         )
-
-        fator_escala = 1
-
-        unidade_final = unidade_original
-
-        unidades_base = [
-            "V",
-            "W",
-            "A",
-            "var",
-            "VA"
-        ]
-
-        if unidade_original in unidades_base:
-
-            (
-                _,
-                unidade_final,
-                fator_escala
-            ) = auto_scale(
-                valor_maximo,
-                unidade_original
-            )
-
-            df_plot["Valor"] = (
-                df_plot["Valor"]
-                / fator_escala
-            )
-
-        tipo_variavel = variavel_info[
-            "tipo"
-        ]
 
         if unidade_final:
 
