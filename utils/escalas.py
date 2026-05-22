@@ -135,3 +135,122 @@ def auto_scale(
 
         fator_final
     )
+
+def auto_scale_visual(
+    serie,
+    unidade
+):
+    """
+    Escalonamento visual multinível
+    para gráficos.
+    """
+
+    if unidade is None:
+
+        return (
+            serie,
+            unidade
+        )
+
+    escalas = {
+
+        "GW": [
+
+            ("MW", 1e3),
+
+            ("kW", 1e6),
+
+            ("W", 1e9)
+        ],
+
+        "MW": [
+
+            ("kW", 1e3),
+
+            ("W", 1e6)
+        ],
+
+        "kW": [
+
+            ("W", 1e3)
+        ],
+
+        "MVar": [
+
+            ("kVar", 1e3),
+
+            ("Var", 1e6)
+        ],
+
+        "kVar": [
+
+            ("Var", 1e3)
+        ],
+
+        "MVA": [
+
+            ("kVA", 1e3),
+
+            ("VA", 1e6)
+        ],
+
+        "kVA": [
+
+            ("VA", 1e3)
+        ]
+    }
+
+    if unidade not in escalas:
+
+        return (
+            serie,
+            unidade
+        )
+
+    valor_maximo = (
+        serie.abs().max()
+    )
+
+    if 1 <= valor_maximo < 1000:
+
+        return (
+            serie,
+            unidade
+        )
+
+    melhor_serie = serie
+
+    melhor_unidade = unidade
+
+    serie_atual = serie.copy()
+
+    for nova_unidade, fator in escalas[
+        unidade
+    ]:
+
+        serie_atual = (
+            serie_atual * 1e3
+        )
+
+        novo_maximo = (
+            serie_atual
+            .abs()
+            .max()
+        )
+
+        melhor_serie = (
+            serie_atual
+        )
+
+        melhor_unidade = (
+            nova_unidade
+        )
+
+        if 1 <= novo_maximo < 1000:
+
+            break
+
+    return (
+        melhor_serie,
+        melhor_unidade
+    )

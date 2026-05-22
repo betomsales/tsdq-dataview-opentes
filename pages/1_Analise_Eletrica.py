@@ -21,7 +21,9 @@ from components.tabelas import (
 from components.cards_qee import (
     render_cards_qee
 )
-
+from utils.escalas import (
+    auto_scale_visual
+)
 
 st.set_page_config(
     page_title="Análise Elétrica",
@@ -149,16 +151,47 @@ if uploaded_file is not None:
 
         df_plot = dados_plot["df_plot"]
 
-       
-       
+        unidade_original = (
+            variavel_info.get(
+                "unidade_detectada"
+            )
+        )
+
+        if unidade_original:
+
+            unidade_original = (
+                unidade_original
+                .replace("Mvar", "MVar")
+                .replace("kvar", "kVar")
+                .replace("var", "Var")
+            )
+
+        serie_escalada, unidade_final = (
+            auto_scale_visual(
+
+                df_plot["Valor"],
+
+                unidade_original
+            )
+        )
+
+        df_plot = df_plot.copy()
+
+        df_plot["Valor"] = serie_escalada
+
         tipo_variavel = variavel_info[
             "tipo"
         ]
 
-        unidade_final = (
-            variavel_info.get(
-                "unidade_detectada"
-            )
+        tipo_variavel = (
+            tipo_variavel
+            .replace("(MW)", "")
+            .replace("(kW)", "")
+            .replace("(W)", "")
+            .replace("(MVar)", "")
+            .replace("(kVar)", "")
+            .replace("(Var)", "")
+            .strip()
         )
 
         if unidade_final:
