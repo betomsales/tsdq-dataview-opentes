@@ -161,6 +161,14 @@ def render_cards_qee(
                 elemento
             )
 
+    if not opcoes_tensao:
+
+        st.warning(
+            "Nenhuma variável de tensão foi identificada para cálculo de QEE."
+        )
+
+        st.stop()
+
     tensao_referencia = st.selectbox(
 
         "Tensão de referência",

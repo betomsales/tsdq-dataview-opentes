@@ -22,8 +22,11 @@ from components.cards_qee import (
     render_cards_qee
 )
 from utils.escalas import (
-    auto_scale_visual
+    obter_escala_visual
 )
+
+from utils.unidades import remover_unidade_do_tipo
+
 
 st.set_page_config(
     page_title="Análise Elétrica",
@@ -70,9 +73,41 @@ if uploaded_file is not None:
             colunas_mapeadas
         )
 
+        if not colunas_mapeadas:
+
+            st.warning(
+                "Nenhuma coluna do arquivo foi reconhecida pelo mapeamento atual."
+            )
+
+            with st.expander(
+                "Ver colunas encontradas no arquivo"
+            ):
+
+                st.write(
+                    list(df.columns)
+                )
+
+            st.stop()
+
+        if not estrutura:
+
+            st.warning(
+                "As colunas foram lidas, mas nenhuma variável pôde ser organizada."
+            )
+
+            st.stop()
+
         tipos_disponiveis = list(
             estrutura.keys()
         )
+
+        if not tipos_disponiveis:
+
+            st.warning(
+                "Nenhum tipo de variável disponível para visualização."
+            )
+
+            st.stop()
 
         tipo_escolhido = st.selectbox(
             "Tipo de variável",
@@ -82,6 +117,14 @@ if uploaded_file is not None:
         elementos = list(
             estrutura[tipo_escolhido].keys()
         )
+
+        if not elementos:
+
+            st.warning(
+                "Nenhum elemento encontrado para o tipo de variável selecionado."
+            )
+
+            st.stop()
 
         elemento_escolhido = st.selectbox(
             "Elemento",
@@ -93,6 +136,14 @@ if uploaded_file is not None:
         ][
             elemento_escolhido
         ]
+
+        if not variaveis:
+
+            st.warning(
+                "Nenhuma variável encontrada para o elemento selecionado."
+            )
+
+            st.stop()
 
         opcoes_variaveis = []
 
@@ -157,17 +208,8 @@ if uploaded_file is not None:
             )
         )
 
-        if unidade_original:
-
-            unidade_original = (
-                unidade_original
-                .replace("Mvar", "MVar")
-                .replace("kvar", "kVar")
-                .replace("var", "Var")
-            )
-
-        serie_escalada, unidade_final = (
-            auto_scale_visual(
+        unidade_final, fator_visual = (
+            obter_escala_visual(
 
                 df_plot["Valor"],
 
@@ -175,23 +217,16 @@ if uploaded_file is not None:
             )
         )
 
+        serie_escalada = (
+            df_plot["Valor"] * fator_visual
+        )
+
         df_plot = df_plot.copy()
 
         df_plot["Valor"] = serie_escalada
 
-        tipo_variavel = variavel_info[
-            "tipo"
-        ]
-
-        tipo_variavel = (
-            tipo_variavel
-            .replace("(MW)", "")
-            .replace("(kW)", "")
-            .replace("(W)", "")
-            .replace("(MVar)", "")
-            .replace("(kVar)", "")
-            .replace("(Var)", "")
-            .strip()
+        tipo_variavel = remover_unidade_do_tipo(
+            variavel_info["tipo"]
         )
 
         if unidade_final:
@@ -235,6 +270,15 @@ if uploaded_file is not None:
                 )
             )    
 
+            for coluna in df_multiserie.columns:
+
+                if coluna != "Tempo":
+
+                    df_multiserie[coluna] = (
+                        df_multiserie[coluna]
+                        * fator_visual
+                    )
+
             with col_direita:
 
                 render_grafico_multiserie(
@@ -263,3 +307,9 @@ if uploaded_file is not None:
             df,
             estrutura
         )
+
+else:
+
+    st.info(
+        "Carregue um arquivo CSV para iniciar a análise elétrica."
+    )

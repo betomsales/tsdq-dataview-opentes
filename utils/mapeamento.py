@@ -1,6 +1,6 @@
 import json
 import re
-
+from utils.unidades import normalizar_unidade
 
 def carregar_mapeamento():
 
@@ -87,7 +87,9 @@ def mapear_colunas(colunas, mapeamento):
 
                 "fase": fase,
 
-                "unidade_detectada": unidade,
+                "unidade_detectada": normalizar_unidade(
+                    unidade
+                ),
 
                 "coluna_original": coluna,
 

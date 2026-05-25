@@ -1,8 +1,8 @@
 {
   "Tensão": {
     "_instrucao_equipe": "Aceita formato nativo do OpenDSS ou limpo. Padrão: (Bus-){NOME}-V{FASE}_pu",
-    "_exemplo": "Bus-UNTRS_039281-V1_pu ou UNTRS_039281-V1_pu",
-    "regex": "(?:Bus-)?(.+?)-[vV](\\d*)_(pu|kV|V)",
+    "_exemplo": "Bus-UNTRS_039281-V1_pu, UNTRS_039281-V1_pu ou Grid-0.0-LV2.101 Bus 28-vm_pu",
+    "regex": "(?:(?:Grid-[\\w.-]+-)|Bus-)?(.+?)-([vV][A-Za-z0-9]*)_(pu|kV|V)",
     "prefixo": "V",
     "tem_fase": true
   },

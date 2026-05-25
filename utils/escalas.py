@@ -136,66 +136,54 @@ def auto_scale(
         fator_final
     )
 
-def auto_scale_visual(
+def obter_escala_visual(
     serie,
     unidade
 ):
     """
-    Escalonamento visual multinível
+    Define unidade final e fator visual
     para gráficos.
     """
 
     if unidade is None:
 
         return (
-            serie,
-            unidade
+            unidade,
+            1
         )
 
     escalas = {
 
         "GW": [
-
             ("MW", 1e3),
-
             ("kW", 1e6),
-
             ("W", 1e9)
         ],
 
         "MW": [
-
             ("kW", 1e3),
-
             ("W", 1e6)
         ],
 
         "kW": [
-
             ("W", 1e3)
         ],
 
         "MVar": [
-
             ("kVar", 1e3),
-
             ("Var", 1e6)
         ],
 
         "kVar": [
-
             ("Var", 1e3)
         ],
 
         "MVA": [
-
             ("kVA", 1e3),
-
             ("VA", 1e6)
         ],
 
         "kVA": [
-
             ("VA", 1e3)
         ]
     }
@@ -203,8 +191,8 @@ def auto_scale_visual(
     if unidade not in escalas:
 
         return (
-            serie,
-            unidade
+            unidade,
+            1
         )
 
     valor_maximo = (
@@ -214,17 +202,17 @@ def auto_scale_visual(
     if 1 <= valor_maximo < 1000:
 
         return (
-            serie,
-            unidade
+            unidade,
+            1
         )
 
-    melhor_serie = serie
+    unidade_final = unidade
 
-    melhor_unidade = unidade
+    fator_final = 1
 
     serie_atual = serie.copy()
 
-    for nova_unidade, fator in escalas[
+    for nova_unidade, fator_acumulado in escalas[
         unidade
     ]:
 
@@ -232,25 +220,45 @@ def auto_scale_visual(
             serie_atual * 1e3
         )
 
-        novo_maximo = (
+        valor_maximo = (
             serie_atual
             .abs()
             .max()
         )
 
-        melhor_serie = (
-            serie_atual
-        )
+        unidade_final = nova_unidade
 
-        melhor_unidade = (
-            nova_unidade
-        )
+        fator_final = fator_acumulado
 
-        if 1 <= novo_maximo < 1000:
+        if 1 <= valor_maximo < 1000:
 
             break
 
     return (
-        melhor_serie,
-        melhor_unidade
+        unidade_final,
+        fator_final
+    )
+
+
+def auto_scale_visual(
+    serie,
+    unidade
+):
+    """
+    Escalonamento visual multinível
+    para gráficos.
+    """
+
+    unidade_final, fator = obter_escala_visual(
+        serie,
+        unidade
+    )
+
+    serie_escalada = (
+        serie * fator
+    )
+
+    return (
+        serie_escalada,
+        unidade_final
     )
