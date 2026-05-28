@@ -4,7 +4,12 @@
     "_exemplo": "Bus-UNTRS_039281-V1_pu, UNTRS_039281-V1_pu ou Grid-0.0-LV2.101 Bus 28-vm_pu",
     "regex": "(?:(?:Grid-[\\w.-]+-)|Bus-)?(.+?)-([vV][A-Za-z0-9]*)_(pu|kV|V)",
     "prefixo": "V",
-    "tem_fase": true
+    "tem_fase": true,
+    "prodist": {
+      "fase_neutro": ["V1", "V2", "V3", "VA", "VB", "VC", "VAN", "VBN", "VCN", "VM"],
+      "fase_fase": ["V12", "V23", "V31", "VAB", "VBC", "VCA"],
+      "nominais_kv": [0.127, 0.22, 0.38, 13.8, 34.5, 69, 138, 230]
+    }
   },
 
   "Corrente (A)": {
