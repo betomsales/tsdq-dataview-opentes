@@ -20,16 +20,16 @@ from utils.comunicacao import (
 
 
 st.set_page_config(
-    page_title="Comunicacao",
+    page_title="Comunicação",
     layout="wide"
 )
 
-st.title("Comunicacao")
+st.title("Comunicação")
 
 st.markdown(
     """
-    Modulo para analise dos resultados de comunicacao
-    provenientes da co-simulacao.
+    Modulo para análise dos resultados de comunicação
+    provenientes da co-simulação.
     """
 )
 
@@ -42,7 +42,7 @@ uploaded_file = render_upload(
 if uploaded_file is None:
 
     st.info(
-        "Carregue um arquivo CSV para iniciar a analise de comunicacao."
+        "Carregue um arquivo CSV para iniciar a analise de comunicação."
     )
 
     st.stop()
