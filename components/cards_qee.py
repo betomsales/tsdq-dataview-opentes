@@ -299,7 +299,7 @@ def render_cards_qee(
     with linha1_col1:
 
         card_qee(
-            "Tensão",
+            "Tensão Média",
             dados_tensao,
             "#f1c40f"
         )
@@ -308,7 +308,7 @@ def render_cards_qee(
 
         card_qee(
 
-            "Desequilíbrio (%) - Simplificado",
+            "Desequilíbrio", 
 
             (
                 {
@@ -397,7 +397,7 @@ def render_cards_qee(
 
             card_qee(
 
-                "Tensão Mínima",
+                "Tensão Mínima Trifásica",
 
                 {
                     "Global": {
@@ -417,7 +417,7 @@ def render_cards_qee(
 
             card_qee(
 
-                "Tensão Máxima",
+                "Tensão Máxima Trifásica",
 
                 {
                     "Global": {
@@ -437,7 +437,7 @@ def render_cards_qee(
 
             card_qee(
 
-                "Tensão Média",
+                "Tensão Média Trifásica",
 
                 {
                     "Global": {

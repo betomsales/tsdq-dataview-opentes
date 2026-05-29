@@ -1,10 +1,13 @@
 import streamlit as st
 import os
-
+from PIL import Image
 # 1. Configuração da página (Sempre o primeiro comando)
+
+icone = Image.open("imagens/logo.png")
+
 st.set_page_config(
     page_title="OpenTES - TSDQ",
-    page_icon="⚡",
+    page_icon=icone,
     layout="wide"
 )
 

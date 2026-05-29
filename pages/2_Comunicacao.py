@@ -35,28 +35,17 @@ st.markdown(
 
 uploaded_file = render_upload(
     session_key="arquivo_comunicacao",
-    label="Carregue o arquivo results.csv",
+    label="Carregue o arquivo CSV",
     file_types=["csv"]
 )
-
 
 if uploaded_file is None:
 
     st.info(
-        "Carregue o arquivo results.csv para iniciar a analise de comunicacao."
+        "Carregue um arquivo CSV para iniciar a analise de comunicacao."
     )
 
     st.stop()
-
-
-if uploaded_file.name.lower() != "results.csv":
-
-    st.warning(
-        "Esta pagina espera especificamente um arquivo chamado results.csv."
-    )
-
-    st.stop()
-
 
 df = ler_resultados_comunicacao(
     uploaded_file
@@ -84,7 +73,6 @@ if erros:
 
     st.stop()
 
-
 origens = listar_origens(
     df
 )
@@ -96,7 +84,6 @@ if not origens:
     )
 
     st.stop()
-
 
 origem_escolhida = st.selectbox(
     "Origem",
