@@ -19,6 +19,12 @@ def card_qee(
     dados=None,
     cor="#95a5a6"
 ):
+    
+    TAMANHO_TITULO = "1.5rem"
+    TAMANHO_FASE = "1.2rem"
+    TAMANHO_VALOR = "1.3rem"    
+
+
     """
     Renderiza card QEE.
     """
@@ -87,9 +93,11 @@ def card_qee(
                 f"justify-content:space-between;"
                 f"margin-bottom:0.3rem;'>"
 
-                f"<span>{fase}</span>"
+                f"<span style='font-size:{TAMANHO_FASE};'>"
+                f"{fase}"
+                f"</span>"
 
-                f"<span>"
+                f"<span style='font-size:{TAMANHO_VALOR};font-weight:bold;'>"
                 f"{valor_str} "
                 f"{unidade or ''}"
                 f"</span>"
@@ -115,6 +123,7 @@ def card_qee(
         <h4 style="
             margin-top:0;
             margin-bottom:1rem;
+            font-size:{TAMANHO_TITULO};
         ">
             {titulo}
         </h4>
