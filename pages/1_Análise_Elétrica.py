@@ -1,5 +1,5 @@
 import streamlit as st
-from utils.leitura import ler_csv
+from utils.leitura import ler_dados
 from utils.leitura import processar_tempo
 from utils.mapeamento import carregar_mapeamento
 from utils.mapeamento import mapear_colunas
@@ -180,8 +180,8 @@ def render_controles_prodist(
 
 uploaded_file = render_upload(
     session_key="arquivo_eletrico",
-    label="Carregue o arquivo CSV",
-    file_types=["csv"]
+    label="Carregue o arquivo CSV ou HDF5",
+    file_types=["csv", "h5", "hdf5"]
 )
 
 
@@ -196,7 +196,17 @@ if uploaded_file is not None:
 
     with aba_temporal:
 
-        df = ler_csv(uploaded_file)
+        try:
+
+            df = ler_dados(uploaded_file)
+
+        except Exception as erro:
+
+            st.error(
+                f"Erro ao ler o arquivo: {erro}"
+            )
+
+            st.stop()
 
         df = processar_tempo(df)
 
