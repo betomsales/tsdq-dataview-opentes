@@ -1,11 +1,16 @@
 import tempfile
 import zipfile
 import re
+import os
 
 from pathlib import Path
 
 import opendssdirect as dss
 
+
+# =====================================================
+# EXTRAÇÃO DO ZIP
+# =====================================================
 
 def extract_zip(zip_file):
 
@@ -21,20 +26,77 @@ def extract_zip(zip_file):
     return Path(temp_dir)
 
 
+# =====================================================
+# LOCALIZAÇÃO DO ARQUIVO PRINCIPAL
+# =====================================================
+
 def find_master(root):
 
-    masters = list(
-        root.rglob("master.dss")
+    dss_files = list(
+        root.rglob("*.dss")
     )
 
-    if not masters:
+    if not dss_files:
 
         raise FileNotFoundError(
-            "master.dss não encontrado"
+            "Nenhum arquivo .dss encontrado."
         )
 
-    return masters[0]
+    # Prioridade 1:
+    # arquivos contendo "master"
 
+    master_candidates = [
+
+        f for f in dss_files
+
+        if "master" in f.name.lower()
+
+    ]
+
+    if master_candidates:
+
+        return sorted(
+            master_candidates,
+            key=lambda x: len(x.name)
+        )[0]
+
+    # Prioridade 2:
+    # arquivos contendo "main"
+
+    main_candidates = [
+
+        f for f in dss_files
+
+        if "main" in f.name.lower()
+
+    ]
+
+    if main_candidates:
+
+        return sorted(
+            main_candidates,
+            key=lambda x: len(x.name)
+        )[0]
+
+    # Prioridade 3:
+    # existe apenas um DSS
+
+    if len(dss_files) == 1:
+
+        return dss_files[0]
+
+    # Prioridade 4:
+    # maior arquivo DSS
+
+    return max(
+        dss_files,
+        key=lambda f: f.stat().st_size
+    )
+
+
+# =====================================================
+# REMOÇÃO DE COMANDOS GRÁFICOS
+# =====================================================
 
 def sanitize_master(master_file):
 
@@ -47,11 +109,9 @@ def sanitize_master(master_file):
         r"^\s*plot\b.*$",
     ]
 
-    lines = content.splitlines()
-
     clean_lines = []
 
-    for line in lines:
+    for line in content.splitlines():
 
         remove = False
 
@@ -70,7 +130,10 @@ def sanitize_master(master_file):
 
             clean_lines.append(line)
 
-    sanitized = master_file.parent / "_master_clean.dss"
+    sanitized = (
+        master_file.parent
+        / "_master_clean.dss"
+    )
 
     sanitized.write_text(
         "\n".join(clean_lines),
@@ -79,18 +142,67 @@ def sanitize_master(master_file):
 
     return sanitized
 
+
+# =====================================================
+# COMPILAÇÃO
+# =====================================================
+
 def compile_circuit(zip_file):
 
-    root = extract_zip(zip_file)
+    original_cwd = os.getcwd()
 
-    master = find_master(root)
+    root = extract_zip(
+        zip_file
+    )
 
-    master = sanitize_master(master)
+    original_master = find_master(
+        root
+    )
+
+    sanitized_master = sanitize_master(
+        original_master
+    )
 
     dss.Basic.ClearAll()
 
-    dss.Text.Command(
-        f'Compile "{master}"'
-    )
+    warning_message = None
 
-    return dss
+    try:
+
+        dss.Text.Command(
+            f'Compile "{sanitized_master}"'
+        )
+
+    except Exception as e:
+
+        warning_message = str(e)
+
+    finally:
+
+        os.chdir(
+            original_cwd
+        )
+
+    buses = []
+
+    try:
+
+        buses = dss.Circuit.AllBusNames()
+
+    except Exception:
+
+        pass
+
+    if len(buses) == 0:
+
+        raise RuntimeError(
+            warning_message
+            or
+            "O OpenDSS não conseguiu compilar o circuito."
+        )
+
+    return {
+        "dss": dss,
+        "master_file": original_master.name,
+        "warning": warning_message,
+    }

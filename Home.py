@@ -1,5 +1,16 @@
 import streamlit as st
 import os
+
+from pathlib import Path
+from PIL import Image
+
+
+BASE_DIR = Path(__file__).resolve().parent
+
+icone = Image.open(
+    BASE_DIR / "imagens" / "logo.png"
+)
+import os
 from PIL import Image
 # 1. Configuração da página (Sempre o primeiro comando)
 
@@ -17,10 +28,17 @@ col1, col2, col3 = st.columns([1, 2, 1])
 
 with col2:
     # Caminho local conforme sua estrutura de pastas
-    caminho_logo = "imagens/OpenTES.png"
+    caminho_logo = (
+        BASE_DIR
+        / "imagens"
+        / "OpenTES.png"
+    )
     
-    if os.path.exists(caminho_logo):
-        st.image(caminho_logo, use_container_width=True)
+    if caminho_logo.exists():
+        st.image(
+            str(caminho_logo),
+            use_container_width=True,
+        )
     else:
         # Fallback caso a imagem não seja encontrada (ajuda no debug)
         st.warning(f"⚠️ Arquivo {caminho_logo} não encontrado.")

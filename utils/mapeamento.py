@@ -1,11 +1,22 @@
 import json
 import re
+
+from pathlib import Path
+
 from utils.unidades import normalizar_unidade
+
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 def carregar_mapeamento():
 
+    arquivo_mapeamento = (
+        BASE_DIR
+        / "configs"
+        / "mapeamento.json"
+    )
+
     with open(
-        "configs/mapeamento.json",
+        arquivo_mapeamento,
         "r",
         encoding="utf-8"
     ) as arquivo:

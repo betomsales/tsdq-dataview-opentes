@@ -11,7 +11,12 @@ from modules.network.topology_builder import (
 from modules.network.topology_renderer import (
     render_graph,
 )
-
+from modules.network.element_inspector import (
+    render_node_details,
+)
+from modules.network.error_handler import (
+    friendly_dss_error,
+)
 
 st.set_page_config(
     page_title="Mapa de Rede",
@@ -31,21 +36,55 @@ if zip_file:
 
     try:
 
-        dss = compile_circuit(
+        result = compile_circuit(
             zip_file
         )
 
+        dss = result["dss"]
+
+        master_file = result["master_file"]
+
+        warning_message = result["warning"]
+
         graph = build_graph(
             dss
+        )
+
+        st.write(
+            "Barramentos encontrados:",
+            graph.total_nodes
         )
 
         st.success(
             "Circuito carregado com sucesso"
         )
 
-        render_graph(
-            graph
+        if warning_message:
+
+            st.warning(
+                warning_message
+            )
+
+        st.caption(
+            f"Arquivo principal detectado: {master_file}"
         )
+
+        col_graph, col_info = st.columns(
+            [4, 1]
+        )
+
+        with col_graph:
+
+            selected_node = render_graph(
+                graph
+            )
+
+        with col_info:
+
+            render_node_details(
+                selected_node,
+                graph,
+            )
 
         with st.expander(
             "Diagnóstico da Rede",
@@ -70,10 +109,11 @@ if zip_file:
 
             st.divider()
 
-            tab1, tab2 = st.tabs(
+            tab1, tab2, tab3 = st.tabs(
                 [
                     "Barramentos",
                     "Conexões",
+                    "Tipos",
                 ]
             )
 
@@ -92,8 +132,18 @@ if zip_file:
                     st.write(
                         f"{edge.source} → {edge.target}"
                     )
+
+            with tab3:
+
+                for node in graph.nodes.values():
+
+                    st.write(
+                        f"{node.label} → {node.node_type}"
+                    )
     except Exception as e:
 
         st.error(
-            str(e)
+            friendly_dss_error(
+                str(e)
+            )
         )

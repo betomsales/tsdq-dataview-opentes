@@ -24,8 +24,14 @@ def render_graph(graph):
             Node(
                 id=node.id,
                 label=node.label,
-                size=20,
-                color=style["background"],
+                size=22,
+
+                color={
+                    "background": style["background"],
+                    "border": style["border"],
+                },
+
+                borderWidth=4,
             )
         )
 
