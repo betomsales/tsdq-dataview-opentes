@@ -8,10 +8,12 @@ dependencies = [
     "haversine==2.9.0",
     "matplotlib==3.9.3",
     "numpy==1.26.4",
+    "opendssdirect-py>=0.9.4",
     "pandas==2.2.2",
     "pillow==11.0.0",
     "plotly==6.0.0",
     "seaborn==0.13.2",
     "streamlit==1.41.1",
+    "streamlit-agraph>=0.0.45",
     "tables==3.10.2",
 ]
