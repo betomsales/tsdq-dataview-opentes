@@ -58,6 +58,26 @@ def get_pv_buses(dss):
 
     return buses
 
+def get_transformer_buses(dss):
+
+    buses = set()
+
+    if not dss.Transformers.First():
+
+        return buses
+
+    while True:
+
+        for bus in dss.CktElement.BusNames():
+
+            buses.add(
+                bus.split(".")[0].lower()
+            )
+
+        if dss.Transformers.Next() == 0:
+            break
+
+    return buses
 
 # =====================================================
 # CLASSIFICAÇÃO
@@ -67,10 +87,17 @@ def get_node_type(
     bus_id,
     load_buses,
     pv_buses,
+    transformer_buses,
 ):
 
     if bus_id == "sourcebus":
         return "refbus"
+
+    if bus_id.startswith("mid"):
+        return "virtual_bus"
+
+    if bus_id.endswith("r"):
+        return "regulator_bus"
 
     if bus_id in pv_buses:
         return "pv"
@@ -78,8 +105,10 @@ def get_node_type(
     if bus_id in load_buses:
         return "load"
 
-    return "bus"
+    if bus_id in transformer_buses:
+        return "transformer_bus"
 
+    return "bus"
 
 # =====================================================
 # NÓS
@@ -90,6 +119,7 @@ def add_nodes(
     dss,
     load_buses,
     pv_buses,
+    transformer_buses,
 ):
 
     for bus in dss.Circuit.AllBusNames():
@@ -104,6 +134,7 @@ def add_nodes(
                     bus_id,
                     load_buses,
                     pv_buses,
+                    transformer_buses,
                 ),
             )
         )
@@ -202,11 +233,16 @@ def build_graph(dss):
 
     pv_buses = get_pv_buses(dss)
 
+    transformer_buses = get_transformer_buses(
+        dss
+    )
+
     add_nodes(
         graph,
         dss,
         load_buses,
         pv_buses,
+        transformer_buses,
     )
 
     add_line_edges(

@@ -24,14 +24,14 @@ def render_graph(graph):
             Node(
                 id=node.id,
                 label=node.label,
-                size=22,
+                size=10,
 
                 color={
                     "background": style["background"],
                     "border": style["border"],
                 },
 
-                borderWidth=4,
+                borderWidth=6,
             )
         )
 
@@ -41,17 +41,18 @@ def render_graph(graph):
             Edge(
                 source=edge.source,
                 target=edge.target,
+                width=4,
+                color="#B8B8B8",
             )
         )
 
     config = Config(
         width="100%",
-        height=700,
+        height=600,
         directed=False,
         physics=True,
         hierarchical=False,
     )
-
     return agraph(
         nodes=nodes,
         edges=edges,
