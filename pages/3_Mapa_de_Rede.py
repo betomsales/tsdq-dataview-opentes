@@ -17,6 +17,8 @@ from modules.network.element_inspector import (
 from modules.network.error_handler import (
     friendly_dss_error,
 )
+from io import BytesIO
+
 
 st.set_page_config(
     page_title="Mapa de Rede",
@@ -32,12 +34,26 @@ zip_file = st.file_uploader(
     type=["zip"],
 )
 
-if zip_file:
+if zip_file is not None:
+
+    st.session_state["network_zip"] = (
+        zip_file.getvalue()
+    )
+
+if (
+    zip_file
+    or
+    "network_zip" in st.session_state
+):
 
     try:
 
+        uploaded_zip = BytesIO(
+            st.session_state["network_zip"]
+        )
+
         result = compile_circuit(
-            zip_file
+            uploaded_zip
         )
 
         dss = result["dss"]

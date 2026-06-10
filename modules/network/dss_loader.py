@@ -25,6 +25,73 @@ def extract_zip(zip_file):
 
     return Path(temp_dir)
 
+# =====================================================
+# NORMALIZA REDIRECTS (.DSS x .dss)
+# =====================================================
+
+def normalize_dss_redirects(root):
+
+    file_map = {}
+
+    for f in root.rglob("*"):
+
+        if f.is_file():
+
+            file_map[
+                f.name.lower()
+            ] = f.name
+
+    for dss_file in root.rglob("*.dss"):
+
+        content = dss_file.read_text(
+            encoding="latin1"
+        )
+
+        new_lines = []
+
+        modified = False
+
+        for line in content.splitlines():
+
+            stripped = line.strip()
+
+            if stripped.lower().startswith(
+                "redirect"
+            ):
+
+                parts = stripped.split()
+
+                if len(parts) >= 2:
+
+                    requested = parts[1]
+
+                    real_name = file_map.get(
+                        requested.lower()
+                    )
+
+                    if (
+                        real_name
+                        and
+                        real_name != requested
+                    ):
+
+                        line = line.replace(
+                            requested,
+                            real_name
+                        )
+
+                        modified = True
+
+            new_lines.append(
+                line
+            )
+
+        if modified:
+
+            dss_file.write_text(
+                "\n".join(new_lines),
+                encoding="latin1"
+            )
 
 # =====================================================
 # LOCALIZAÇÃO DO ARQUIVO PRINCIPAL
@@ -79,13 +146,31 @@ def find_master(root):
         )[0]
 
     # Prioridade 3:
+    # arquivos contendo "run"
+
+    run_candidates = [
+
+        f for f in dss_files
+
+        if "run" in f.name.lower()
+
+    ]
+
+    if run_candidates:
+
+        return sorted(
+            run_candidates,
+            key=lambda x: len(x.name)
+        )[0]
+
+    # Prioridade 4:
     # existe apenas um DSS
 
     if len(dss_files) == 1:
 
         return dss_files[0]
 
-    # Prioridade 4:
+    # Prioridade 5:
     # maior arquivo DSS
 
     return max(
@@ -142,6 +227,69 @@ def sanitize_master(master_file):
 
     return sanitized
 
+def fix_redirect_case(
+    master_file,
+    root,
+):
+
+    file_map = {}
+
+    for f in root.rglob("*"):
+
+        if f.is_file():
+
+            file_map[
+                f.name.lower()
+            ] = f.name
+
+    content = master_file.read_text(
+        encoding="latin1"
+    )
+
+    lines = []
+
+    for line in content.splitlines():
+
+        stripped = line.strip()
+
+        if stripped.lower().startswith(
+            "redirect "
+        ):
+
+            parts = stripped.split()
+
+            if len(parts) >= 2:
+
+                requested = parts[1]
+
+                real_name = file_map.get(
+                    requested.lower()
+                )
+
+                if real_name:
+
+                    line = line.replace(
+                        requested,
+                        real_name
+                    )
+
+        lines.append(
+            line
+        )
+
+    fixed_file = (
+        master_file.parent
+        / "_master_fixed.dss"
+    )
+
+    fixed_file.write_text(
+        "\n".join(lines),
+        encoding="latin1"
+    )
+
+    return fixed_file
+
+
 
 # =====================================================
 # COMPILAÇÃO
@@ -155,13 +303,55 @@ def compile_circuit(zip_file):
         zip_file
     )
 
+    normalize_dss_redirects(
+        root
+    )
+
     original_master = find_master(
         root
     )
 
+    print(
+        "MASTER ESCOLHIDO:",
+        original_master
+    )
+
+    for f in root.rglob("*.dss"):
+
+        if "ieee34mod2" in f.name.lower():
+
+            print("\n===== ieee34Mod2.dss =====\n")
+
+            print(
+                f.read_text(
+                    encoding="latin1"
+                )
+            )
+
+    print("\nARQUIVOS DSS ENCONTRADOS:\n")
+
+    for f in root.rglob("*.dss"):
+
+        print(
+            f.relative_to(root)
+        )
+
     sanitized_master = sanitize_master(
         original_master
     )
+
+    sanitized_master = fix_redirect_case(
+        sanitized_master,
+        root,
+    )
+
+    for f in root.rglob("*"):
+
+        if f.is_file():
+
+            print(
+                f.relative_to(root)
+            )
 
     dss.Basic.ClearAll()
 
