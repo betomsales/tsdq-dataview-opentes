@@ -227,70 +227,6 @@ def sanitize_master(master_file):
 
     return sanitized
 
-def fix_redirect_case(
-    master_file,
-    root,
-):
-
-    file_map = {}
-
-    for f in root.rglob("*"):
-
-        if f.is_file():
-
-            file_map[
-                f.name.lower()
-            ] = f.name
-
-    content = master_file.read_text(
-        encoding="latin1"
-    )
-
-    lines = []
-
-    for line in content.splitlines():
-
-        stripped = line.strip()
-
-        if stripped.lower().startswith(
-            "redirect "
-        ):
-
-            parts = stripped.split()
-
-            if len(parts) >= 2:
-
-                requested = parts[1]
-
-                real_name = file_map.get(
-                    requested.lower()
-                )
-
-                if real_name:
-
-                    line = line.replace(
-                        requested,
-                        real_name
-                    )
-
-        lines.append(
-            line
-        )
-
-    fixed_file = (
-        master_file.parent
-        / "_master_fixed.dss"
-    )
-
-    fixed_file.write_text(
-        "\n".join(lines),
-        encoding="latin1"
-    )
-
-    return fixed_file
-
-
-
 # =====================================================
 # COMPILAÇÃO
 # =====================================================
@@ -311,47 +247,9 @@ def compile_circuit(zip_file):
         root
     )
 
-    print(
-        "MASTER ESCOLHIDO:",
-        original_master
-    )
-
-    for f in root.rglob("*.dss"):
-
-        if "ieee34mod2" in f.name.lower():
-
-            print("\n===== ieee34Mod2.dss =====\n")
-
-            print(
-                f.read_text(
-                    encoding="latin1"
-                )
-            )
-
-    print("\nARQUIVOS DSS ENCONTRADOS:\n")
-
-    for f in root.rglob("*.dss"):
-
-        print(
-            f.relative_to(root)
-        )
-
     sanitized_master = sanitize_master(
         original_master
     )
-
-    sanitized_master = fix_redirect_case(
-        sanitized_master,
-        root,
-    )
-
-    for f in root.rglob("*"):
-
-        if f.is_file():
-
-            print(
-                f.relative_to(root)
-            )
 
     dss.Basic.ClearAll()
 
