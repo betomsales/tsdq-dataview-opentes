@@ -85,22 +85,60 @@ if (
             f"Arquivo principal detectado: {master_file}"
         )
 
-        col_graph, col_info = st.columns(
-            [4, 1]
+        tab_simple, tab_complete = st.tabs(
+            [
+                "Rede Simplificada",
+                "Rede Completa",
+            ]
         )
 
-        with col_graph:
+        with tab_simple:
 
-            selected_node = render_graph(
-                graph
+            # col_graph, col_info = st.columns(
+            #     [4, 1]
+            # )
+
+            # with col_graph:
+
+            #     selected_node = render_graph(
+            #         graph,
+            #         key="simple_graph",
+            #     )
+            
+            # with col_info:
+
+            #     render_node_details(
+            #         selected_node,
+            #         graph,
+            #     )
+
+            st.info(
+                "Rede simplificada em desenvolvimento."
             )
 
-        with col_info:
+        with tab_complete:
 
-            render_node_details(
-                selected_node,
-                graph,
+            col_graph, col_info = st.columns(
+                [4, 1]
             )
+
+            with col_graph:
+
+                # selected_node = render_graph(
+                #     graph,
+                #     key="complete_graph",
+                # )
+                
+                selected_node = render_graph(
+                    graph
+                )
+
+            with col_info:
+
+                render_node_details(
+                    selected_node,
+                    graph,
+                )
 
         with st.expander(
             "Diagnóstico da Rede",
