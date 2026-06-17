@@ -12,7 +12,6 @@ from .topology_styles import (
 
 def render_graph(
     graph,
-    key=None,
 ):
 
     nodes = []
@@ -60,5 +59,4 @@ def render_graph(
         nodes=nodes,
         edges=edges,
         config=config,
-        key=key,
     )
