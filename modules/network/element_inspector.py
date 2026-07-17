@@ -47,6 +47,35 @@ NODE_INFO = {
 }
 
 
+def _render_measurements(measurements):
+    if not measurements:
+        st.caption("Sem medicoes associadas neste instante.")
+        return
+
+    groups = {}
+
+    for measurement in measurements:
+        groups.setdefault(measurement["grupo"], []).append(measurement)
+
+    for group, items in groups.items():
+        st.markdown(f"**{group}**")
+
+        for item in items:
+            unit = f" {item['unidade']}" if item.get("unidade") else ""
+            st.write(f"{item['variavel']}: {item['valor']:.6g}{unit}")
+
+
+def render_edge_details(edge_id, graph):
+    edge = graph.edges.get(edge_id)
+
+    if edge is None:
+        return
+
+    st.markdown(f"### {edge.id}")
+    st.caption(f"{edge.source} -> {edge.target} | {edge.edge_type}")
+    _render_measurements(edge.metadata.get("measurements", []))
+
+
 def get_neighbors(
     node_id,
     graph,
@@ -126,6 +155,39 @@ def render_node_details(
 
     st.write(
         f"Conexões: {len(neighbors)}"
+    )
+
+    st.markdown(
+        "#### Tensao"
+    )
+
+    voltage_phases = node.metadata.get(
+        "voltage_phases_pu",
+        {}
+    )
+
+    if voltage_phases:
+
+        for phase in sorted(voltage_phases):
+
+            st.metric(
+                phase,
+                f"{voltage_phases[phase]:.6f} pu"
+            )
+
+        st.caption(
+            f"Media das fases: {node.voltage_pu:.6f} pu"
+        )
+
+    else:
+
+        st.caption(
+            "Sem medicao de tensao para este no."
+        )
+
+    st.markdown("#### Outras medicoes")
+    _render_measurements(
+        node.metadata.get("measurements", [])
     )
 
     if neighbors:

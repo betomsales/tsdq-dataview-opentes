@@ -46,6 +46,7 @@ class NetworkGraph:
 
         self.nodes = {}
         self.edges = {}
+        self.metadata = {}
 
     def add_node(self, node):
 
