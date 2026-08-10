@@ -1,4 +1,8 @@
+import hashlib
+import json
+
 import streamlit as st
+from pathlib import Path
 
 from modules.network.dss_loader import (
     compile_circuit,
@@ -21,7 +25,6 @@ from modules.network.error_handler import (
 )
 from modules.network.cosim_loader import (
     apply_measurement_snapshot,
-    get_monitored_node_ids,
     load_cosim_results,
     load_topology_json,
     prepare_node_time_series,
@@ -37,6 +40,119 @@ st.set_page_config(
 st.title(
     "Mapa de Rede"
 )
+
+
+def calcular_sha256_upload(uploaded_file):
+    uploaded_file.seek(0)
+    file_hash = hashlib.sha256(
+        uploaded_file.read()
+    ).hexdigest().upper()
+    uploaded_file.seek(0)
+
+    return file_hash
+
+
+def carregar_json_upload(uploaded_file):
+    uploaded_file.seek(0)
+    raw = uploaded_file.read()
+    uploaded_file.seek(0)
+
+    if isinstance(raw, bytes):
+        raw = raw.decode("utf-8-sig")
+
+    return json.loads(raw)
+
+
+def obter_hash_vinculado(topology_data):
+    metadata = topology_data.get(
+        "metadata",
+        {},
+    ) or {}
+
+    hash_value = metadata.get(
+        "results_sha256",
+        "",
+    )
+
+    return str(hash_value).strip().upper()
+
+
+def gerar_topologia_vinculada(
+    topology_data,
+    topology_name,
+    results_name,
+    results_hash,
+):
+    updated_topology = dict(topology_data)
+    metadata = dict(
+        updated_topology.get("metadata") or {}
+    )
+
+    metadata.update(
+        {
+            "scenario_id": metadata.get(
+                "scenario_id",
+                Path(topology_name).stem,
+            ),
+            "results_file": results_name,
+            "results_sha256": results_hash,
+            "hash_algorithm": "sha256",
+        }
+    )
+
+    updated_topology["metadata"] = metadata
+
+    return json.dumps(
+        updated_topology,
+        ensure_ascii=False,
+        indent=4,
+    ).encode("utf-8")
+
+
+def render_validacao_vinculo(
+    topology_data,
+    topology_name,
+    results_name,
+    results_hash,
+):
+    expected_hash = obter_hash_vinculado(
+        topology_data
+    )
+
+    if not expected_hash:
+        st.warning(
+            "Esta topologia ainda nao possui vinculo SHA-256 com o CSV carregado."
+        )
+        st.download_button(
+            "Baixar topologia vinculada ao CSV",
+            data=gerar_topologia_vinculada(
+                topology_data,
+                topology_name,
+                results_name,
+                results_hash,
+            ),
+            file_name=f"{Path(topology_name).stem}_vinculada.json",
+            mime="application/json",
+        )
+
+        return
+
+    if expected_hash == results_hash:
+        st.success(
+            "Vinculo validado: a topologia corresponde ao CSV carregado."
+        )
+        return
+
+    st.error(
+        "Vinculo invalido: o hash do CSV carregado nao corresponde ao "
+        "hash registrado na topologia."
+    )
+    st.caption(
+        f"Hash esperado: {expected_hash}"
+    )
+    st.caption(
+        f"Hash do CSV carregado: {results_hash}"
+    )
 
 input_mode = st.radio(
     "Fonte da rede",
@@ -71,6 +187,21 @@ if input_mode == "Resultados da co-simulacao":
     if topology_file is not None and results_file is not None:
 
         try:
+
+            topology_data = carregar_json_upload(
+                topology_file
+            )
+
+            results_hash = calcular_sha256_upload(
+                results_file
+            )
+
+            render_validacao_vinculo(
+                topology_data,
+                topology_file.name,
+                results_file.name,
+                results_hash,
+            )
 
             graph = load_topology_json(
                 topology_file
@@ -197,50 +328,16 @@ if graph is not None:
                 f"Arquivo principal detectado: {master_file}"
             )
 
-        col_graph, col_info = st.columns(
-            [4, 1]
+        selected_node = render_graph(
+            graph
         )
 
-        with col_graph:
+        st.divider()
 
-            selected_node = render_graph(
-                graph
-            )
-
-        with col_info:
-
-            render_node_details(
-                selected_node,
-                graph,
-            )
-
-            measured_edge_ids = [
-                edge.id
-                for edge in graph.edges.values()
-                if edge.metadata.get("measurements")
-            ]
-
-            if measured_edge_ids:
-
-                st.divider()
-                selected_edge = st.selectbox(
-                    "Elemento de linha",
-                    measured_edge_ids,
-                )
-                render_edge_details(
-                    selected_edge,
-                    graph,
-                )
-
-            unassociated = graph.metadata.get(
-                "unassociated_measurements",
-                [],
-            )
-
-            if unassociated:
-
-                with st.expander("Medicoes nao associadas"):
-                    st.json(unassociated)
+        render_node_details(
+            selected_node,
+            graph,
+        )
 
         if (
             results_df is not None
@@ -248,30 +345,48 @@ if graph is not None:
             and time_values is not None
         ):
 
-            monitored_node_ids = get_monitored_node_ids(
-                graph,
-                measurement_columns,
-            )
+            st.divider()
 
-            if monitored_node_ids:
+            if selected_node:
 
-                st.divider()
-                temporal_node_id = st.selectbox(
-                    "No monitorado para a serie temporal",
-                    monitored_node_ids,
-                    key="temporal_node_id",
-                )
                 node_series = prepare_node_time_series(
                     graph,
                     results_df,
                     measurement_columns,
                     time_values,
-                    temporal_node_id,
+                    selected_node,
                 )
-                render_node_time_series(
-                    temporal_node_id,
-                    node_series,
+
+                if node_series:
+
+                    render_node_time_series(
+                        selected_node,
+                        node_series,
+                    )
+
+                else:
+
+                    st.info(
+                        "O barramento selecionado nao possui serie temporal "
+                        "associada no arquivo de resultados."
+                    )
+
+            else:
+
+                st.info(
+                    "Selecione um barramento no grafo para visualizar "
+                    "a serie temporal correspondente."
                 )
+
+        unassociated = graph.metadata.get(
+            "unassociated_measurements",
+            [],
+        )
+
+        if unassociated:
+
+            with st.expander("Medicoes nao associadas"):
+                st.json(unassociated)
 
         with st.expander(
             "Diagnóstico da Rede",
@@ -327,3 +442,21 @@ if graph is not None:
                     st.write(
                         f"{node.label} → {node.node_type}"
                     )
+
+        measured_edge_ids = [
+            edge.id
+            for edge in graph.edges.values()
+            if edge.metadata.get("measurements")
+        ]
+
+        if measured_edge_ids:
+
+            st.divider()
+            selected_edge = st.selectbox(
+                "Elemento de linha",
+                measured_edge_ids,
+            )
+            render_edge_details(
+                selected_edge,
+                graph,
+            )
