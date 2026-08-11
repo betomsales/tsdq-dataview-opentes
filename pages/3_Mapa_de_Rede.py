@@ -2,7 +2,6 @@ import hashlib
 import json
 
 import streamlit as st
-from pathlib import Path
 
 from modules.network.dss_loader import (
     compile_circuit,
@@ -77,42 +76,8 @@ def obter_hash_vinculado(topology_data):
     return str(hash_value).strip().upper()
 
 
-def gerar_topologia_vinculada(
-    topology_data,
-    topology_name,
-    results_name,
-    results_hash,
-):
-    updated_topology = dict(topology_data)
-    metadata = dict(
-        updated_topology.get("metadata") or {}
-    )
-
-    metadata.update(
-        {
-            "scenario_id": metadata.get(
-                "scenario_id",
-                Path(topology_name).stem,
-            ),
-            "results_file": results_name,
-            "results_sha256": results_hash,
-            "hash_algorithm": "sha256",
-        }
-    )
-
-    updated_topology["metadata"] = metadata
-
-    return json.dumps(
-        updated_topology,
-        ensure_ascii=False,
-        indent=4,
-    ).encode("utf-8")
-
-
 def render_validacao_vinculo(
     topology_data,
-    topology_name,
-    results_name,
     results_hash,
 ):
     expected_hash = obter_hash_vinculado(
@@ -120,28 +85,19 @@ def render_validacao_vinculo(
     )
 
     if not expected_hash:
-        st.warning(
-            "Esta topologia ainda nao possui vinculo SHA-256 com o CSV carregado."
-        )
-        st.download_button(
-            "Baixar topologia vinculada ao CSV",
-            data=gerar_topologia_vinculada(
-                topology_data,
-                topology_name,
-                results_name,
-                results_hash,
-            ),
-            file_name=f"{Path(topology_name).stem}_vinculada.json",
-            mime="application/json",
+        st.error(
+            "Topologia sem vinculo SHA-256 com o arquivo CSV. "
+            "Solicite a equipe da co-simulacao um JSON gerado com "
+            "metadata.results_sha256."
         )
 
-        return
+        return False
 
     if expected_hash == results_hash:
         st.success(
             "Vinculo validado: a topologia corresponde ao CSV carregado."
         )
-        return
+        return True
 
     st.error(
         "Vinculo invalido: o hash do CSV carregado nao corresponde ao "
@@ -153,6 +109,8 @@ def render_validacao_vinculo(
     st.caption(
         f"Hash do CSV carregado: {results_hash}"
     )
+
+    return False
 
 input_mode = st.radio(
     "Fonte da rede",
@@ -196,47 +154,47 @@ if input_mode == "Resultados da co-simulacao":
                 results_file
             )
 
-            render_validacao_vinculo(
+            vinculo_valido = render_validacao_vinculo(
                 topology_data,
-                topology_file.name,
-                results_file.name,
                 results_hash,
             )
 
-            graph = load_topology_json(
-                topology_file
-            )
+            if vinculo_valido:
 
-            (
-                results_df,
-                measurement_columns,
-                time_column,
-                time_values,
-            ) = load_cosim_results(
-                results_file
-            )
+                graph = load_topology_json(
+                    topology_file
+                )
 
-            selected_row = st.slider(
-                "Instante da simulacao",
-                min_value=0,
-                max_value=len(results_df) - 1,
-                value=0,
-            )
+                (
+                    results_df,
+                    measurement_columns,
+                    time_column,
+                    time_values,
+                ) = load_cosim_results(
+                    results_file
+                )
 
-            selected_time = time_values.iloc[selected_row]
+                selected_row = st.slider(
+                    "Instante da simulacao",
+                    min_value=0,
+                    max_value=len(results_df) - 1,
+                    value=0,
+                )
 
-            if selected_time is not None and not str(selected_time) == "NaT":
-                snapshot_caption = selected_time.strftime("%d/%m/%Y %H:%M:%S")
-            else:
-                snapshot_caption = str(results_df.iloc[selected_row][time_column])
+                selected_time = time_values.iloc[selected_row]
 
-            measurement_stats = apply_measurement_snapshot(
-                graph,
-                results_df,
-                measurement_columns,
-                selected_row,
-            )
-            measured_nodes = measurement_stats["measured_nodes"]
+                if selected_time is not None and not str(selected_time) == "NaT":
+                    snapshot_caption = selected_time.strftime("%d/%m/%Y %H:%M:%S")
+                else:
+                    snapshot_caption = str(results_df.iloc[selected_row][time_column])
+
+                measurement_stats = apply_measurement_snapshot(
+                    graph,
+                    results_df,
+                    measurement_columns,
+                    selected_row,
+                )
+                measured_nodes = measurement_stats["measured_nodes"]
 
         except Exception as e:
 
