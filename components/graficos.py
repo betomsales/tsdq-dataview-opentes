@@ -1,7 +1,8 @@
-import streamlit as st
+﻿import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import unicodedata
 
 from utils.prodist import (
     obter_limites_prodist
@@ -13,6 +14,21 @@ CORES_PRODIST = {
     "precario": "rgba(243, 156, 18, 0.18)",
     "adequado": "rgba(46, 204, 113, 0.13)",
 }
+
+
+def _normalizar_tipo_variavel(tipo):
+    texto = str(tipo or "")
+    texto = unicodedata.normalize(
+        "NFKD",
+        texto,
+    )
+    texto = texto.encode(
+        "ascii",
+        errors="ignore",
+    ).decode(
+        "ascii",
+    )
+    return texto.lower()
 
 
 def montar_linhas_limite_prodist(limites):
@@ -138,7 +154,7 @@ def eh_tensao_pu(variavel_info):
     """
 
     return (
-        variavel_info["tipo"] == "Tensão"
+        _normalizar_tipo_variavel(variavel_info["tipo"]) == "tensao"
         and
         variavel_info.get(
             "unidade_detectada"
@@ -151,7 +167,7 @@ def eh_tensao(variavel_info):
     Verifica se a variavel e uma tensao reconhecida.
     """
 
-    return variavel_info["tipo"] == "Tensão"
+    return _normalizar_tipo_variavel(variavel_info["tipo"]) == "tensao"
 
 
 def aplicar_faixas_prodist_temporal(
@@ -565,3 +581,4 @@ def render_grafico_distribuicao_tensao(
         fig,
         use_container_width=True
     )
+

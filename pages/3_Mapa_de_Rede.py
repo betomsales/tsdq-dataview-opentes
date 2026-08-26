@@ -19,6 +19,14 @@ from modules.network.element_inspector import (
     render_edge_details,
     render_node_details,
 )
+from components.analise_eletrica_rede import (
+    montar_estrutura_analise_rede,
+    preparar_dataframe_analise,
+    render_analise_eletrica_elemento,
+)
+from components.cards_qee import (
+    render_cards_qee,
+)
 from modules.network.error_handler import (
     friendly_dss_error,
 )
@@ -127,6 +135,8 @@ measurement_stats = None
 results_df = None
 measurement_columns = None
 time_values = None
+analysis_df = None
+analysis_structure = None
 
 if input_mode == "Resultados da co-simulacao":
 
@@ -195,6 +205,14 @@ if input_mode == "Resultados da co-simulacao":
                     selected_row,
                 )
                 measured_nodes = measurement_stats["measured_nodes"]
+                analysis_df = preparar_dataframe_analise(
+                    results_df,
+                    time_values,
+                )
+                analysis_structure = montar_estrutura_analise_rede(
+                    graph,
+                    measurement_columns,
+                )
 
         except Exception as e:
 
@@ -286,55 +304,150 @@ if graph is not None:
                 f"Arquivo principal detectado: {master_file}"
             )
 
-        selected_node = render_graph(
+        clicked_node = render_graph(
             graph
         )
 
         st.divider()
 
-        render_node_details(
-            selected_node,
-            graph,
+        if isinstance(clicked_node, dict):
+            clicked_node = clicked_node.get("id")
+
+        if clicked_node in graph.nodes:
+            st.session_state["network_selected_node"] = clicked_node
+
+        node_options = sorted(
+            graph.nodes.keys()
+        )
+        current_node = st.session_state.get(
+            "network_selected_node"
         )
 
-        if (
-            results_df is not None
-            and measurement_columns is not None
-            and time_values is not None
-        ):
+        if current_node not in graph.nodes:
+            current_node = None
 
-            st.divider()
+        selection_options = [
+            None,
+            *node_options,
+        ]
+        selection_index = selection_options.index(
+            current_node
+        )
 
-            if selected_node:
+        def format_node_option(node_id):
 
-                node_series = prepare_node_time_series(
-                    graph,
-                    results_df,
-                    measurement_columns,
-                    time_values,
+            if node_id is None:
+                return "Selecione um barramento"
+
+            node = graph.nodes[node_id]
+
+            if node.label == node_id:
+                return node_id
+
+            return f"{node.label} ({node_id})"
+
+        selected_node = st.selectbox(
+            "Barramento analisado",
+            selection_options,
+            index=selection_index,
+            format_func=format_node_option,
+        )
+
+        if selected_node:
+            st.session_state["network_selected_node"] = selected_node
+
+            aba_inspetor, aba_temporal, aba_qee = st.tabs(
+                [
+                    "Inspetor",
+                    "Analise Temporal",
+                    "Dados de Qualidade Energetica",
+                ]
+            )
+
+            with aba_inspetor:
+
+                render_node_details(
                     selected_node,
+                    graph,
                 )
 
-                if node_series:
+            with aba_temporal:
 
-                    render_node_time_series(
+                if (
+                    analysis_df is not None
+                    and analysis_structure is not None
+                ):
+
+                    render_analise_eletrica_elemento(
+                        analysis_df,
+                        analysis_structure,
                         selected_node,
-                        node_series,
+                        key_prefix=f"analise_rede_{selected_node}",
+                    )
+
+                elif (
+                    results_df is not None
+                    and measurement_columns is not None
+                    and time_values is not None
+                ):
+
+                    node_series = prepare_node_time_series(
+                        graph,
+                        results_df,
+                        measurement_columns,
+                        time_values,
+                        selected_node,
+                    )
+
+                    if node_series:
+
+                        render_node_time_series(
+                            selected_node,
+                            node_series,
+                        )
+
+                    else:
+
+                        st.info(
+                            "O barramento selecionado nao possui serie temporal "
+                            "associada no arquivo de resultados."
+                        )
+
+                else:
+
+                    st.info(
+                        "A analise temporal esta disponivel para entradas "
+                        "JSON + CSV validadas por hash."
+                    )
+
+            with aba_qee:
+
+                if (
+                    analysis_df is not None
+                    and analysis_structure is not None
+                ):
+
+                    render_cards_qee(
+                        analysis_df,
+                        analysis_structure,
+                        elemento_referencia=selected_node,
+                        permitir_selecao=False,
+                        key_prefix=f"qee_rede_{selected_node}",
                     )
 
                 else:
 
                     st.info(
-                        "O barramento selecionado nao possui serie temporal "
-                        "associada no arquivo de resultados."
+                        "Os dados de qualidade energetica estao disponiveis "
+                        "para entradas JSON + CSV validadas por hash."
                     )
 
-            else:
+        else:
 
-                st.info(
-                    "Selecione um barramento no grafo para visualizar "
-                    "a serie temporal correspondente."
-                )
+            st.info(
+                "Selecione um barramento no grafo ou na barra para visualizar "
+                "o inspetor e a analise eletrica correspondente."
+            )
 
         unassociated = graph.metadata.get(
             "unassociated_measurements",
