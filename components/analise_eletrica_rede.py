@@ -41,6 +41,7 @@ TIPO_IRRADIANCIA = "Irradiância Solar (DNI)"
 TIPO_POTENCIA_FV = "Potência Fotovoltaica"
 TIPO_POTENCIA_ATIVA = "Potência Ativa da Rede (MW)"
 TIPO_POTENCIA_REATIVA = "Potência Reativa da Rede (MVar)"
+TIPO_TEMPERATURA_PV = "Temperatura do PV"
 
 
 def preparar_dataframe_analise(
@@ -141,8 +142,11 @@ def _classificar_variavel(item):
     unidade = normalizar_unidade(unidade)
     fase = None
 
-    if variavel_lower == "dni":
+    if variavel_lower in {"dni", "irradiance"}:
         return TIPO_IRRADIANCIA, None, unidade or "DNI"
+
+    if variavel_lower in {"temperature", "temperatura"}:
+        return TIPO_TEMPERATURA_PV, None, unidade
 
     if variavel_lower == "tap":
         return TIPO_TAP, None, unidade
@@ -150,13 +154,44 @@ def _classificar_variavel(item):
     if variavel_lower.startswith("p_gen"):
         return TIPO_POTENCIA_FV, None, unidade
 
-    if variavel_lower == "p":
+    match_p = re.match(
+        r"^p([123abc])?$",
+        variavel_lower,
+    )
+
+    if match_p:
+        fase = (
+            f"P{match_p.group(1).upper()}"
+            if match_p.group(1)
+            else None
+        )
+
+        if item["target_kind"] in {"pv", "pv_equipment"}:
+            return TIPO_POTENCIA_FV, fase, unidade
+
+        return TIPO_POTENCIA_ATIVA, fase, unidade
+
+    if variavel_lower.startswith("p_"):
         if item["target_kind"] in {"pv", "pv_equipment"}:
             return TIPO_POTENCIA_FV, None, unidade
 
         return TIPO_POTENCIA_ATIVA, None, unidade
 
-    if variavel_lower == "q":
+    match_q = re.match(
+        r"^q([123abc])?$",
+        variavel_lower,
+    )
+
+    if match_q:
+        fase = (
+            f"Q{match_q.group(1).upper()}"
+            if match_q.group(1)
+            else None
+        )
+
+        return TIPO_POTENCIA_REATIVA, fase, unidade
+
+    if variavel_lower.startswith("q_"):
         return TIPO_POTENCIA_REATIVA, None, unidade
 
     fase = _fase_por_prefixo(
@@ -199,11 +234,50 @@ def _pertence_ao_no(
     ):
         return True
 
+    if (
+        item["target_kind"] in {"pv", "pv_equipment"}
+        and item.get("target_node_id") == node_id
+        and node_id in graph.nodes
+    ):
+        return True
+
     return (
         item["target_kind"] in {"pv", "pv_equipment"}
         and len(pv_nodes) == 1
         and pv_nodes[0] == node_id
     )
+
+
+def _elemento_da_medicao(item):
+    if item["target_kind"] == "node":
+        return item["target_id"]
+
+    if item["target_kind"] == "edge":
+        return item["target_id"]
+
+    if item["target_kind"] == "pv":
+        return f"pvsystem:{item['target_id']}"
+
+    if item["target_kind"] == "pv_equipment":
+        return f"equipamento:{item['target_id']}"
+
+    return item["target_id"]
+
+
+def _tipo_entidade(item):
+    if item["target_kind"] == "node":
+        return "Barra"
+
+    if item["target_kind"] == "edge":
+        return "Linha"
+
+    if item["target_kind"] == "pv":
+        return "PVSystem"
+
+    if item["target_kind"] == "pv_equipment":
+        return "Equipamento"
+
+    return "Outro"
 
 
 def montar_estrutura_analise_rede(
@@ -213,39 +287,221 @@ def montar_estrutura_analise_rede(
     estrutura = {}
     mapeamento = carregar_mapeamento()
 
-    for node_id in graph.nodes:
-        for item in measurement_columns:
-            if not _pertence_ao_no(
-                graph,
-                item,
-                node_id,
-            ):
-                continue
+    for item in measurement_columns:
+        elemento = _elemento_da_medicao(
+            item
+        )
+        tipo, fase, unidade = _classificar_variavel(
+            item
+        )
 
-            tipo, fase, unidade = _classificar_variavel(
-                item
-            )
+        variavel_info = {
+            "tipo": tipo,
+            "elemento": elemento,
+            "fase": fase,
+            "unidade_detectada": unidade,
+            "coluna_original": item["column"],
+            "metadados": mapeamento.get(tipo, {}),
+            "tipo_entidade": _tipo_entidade(item),
+            "origem_medicao": item["group"],
+            "target_kind": item["target_kind"],
+            "target_id": item["target_id"],
+            "target_node_id": item.get("target_node_id"),
+        }
 
-            variavel_info = {
-                "tipo": tipo,
-                "elemento": node_id,
-                "fase": fase,
-                "unidade_detectada": unidade,
-                "coluna_original": item["column"],
-                "metadados": mapeamento.get(tipo, {}),
-            }
-
-            estrutura.setdefault(
-                tipo,
-                {},
-            ).setdefault(
-                node_id,
-                [],
-            ).append(
-                variavel_info
-            )
+        estrutura.setdefault(
+            tipo,
+            {},
+        ).setdefault(
+            elemento,
+            [],
+        ).append(
+            variavel_info
+        )
 
     return estrutura
+
+
+def _elemento_tem_variaveis(
+    estrutura,
+    elemento,
+):
+    return any(
+        elemento in elementos
+        for elementos in estrutura.values()
+    )
+
+
+def _variaveis_do_elemento(
+    estrutura,
+    elemento,
+):
+    variaveis = []
+
+    for elementos in estrutura.values():
+        variaveis.extend(
+            elementos.get(
+                elemento,
+                [],
+            )
+        )
+
+    return variaveis
+
+
+def _linhas_conectadas(
+    graph,
+    node_id,
+):
+    return [
+        edge
+        for edge in graph.edges.values()
+        if node_id in {edge.source, edge.target}
+    ]
+
+
+def _equipamentos_vinculados(
+    graph,
+    estrutura,
+    node_id,
+):
+    pv_nodes = [
+        node.id
+        for node in graph.nodes.values()
+        if node.node_type == "pv"
+    ]
+
+    equipamentos = []
+
+    for elementos in estrutura.values():
+        for elemento, variaveis in elementos.items():
+            if not variaveis:
+                continue
+
+            tipo_entidade = variaveis[0].get(
+                "tipo_entidade"
+            )
+            target_node_id = variaveis[0].get(
+                "target_node_id"
+            )
+
+            if (
+                tipo_entidade in {"PVSystem", "Equipamento"}
+                and target_node_id == node_id
+            ):
+                equipamentos.append(
+                    elemento
+                )
+                continue
+
+            if (
+                tipo_entidade in {"PVSystem", "Equipamento"}
+                and not target_node_id
+                and len(pv_nodes) == 1
+                and pv_nodes[0] == node_id
+            ):
+                equipamentos.append(
+                    elemento
+                )
+
+    return sorted(
+        set(equipamentos)
+    )
+
+
+def _rotulo_elemento(
+    graph,
+    estrutura,
+    elemento,
+):
+    if elemento in graph.nodes:
+        node = graph.nodes[elemento]
+
+        if node.label == elemento:
+            return elemento
+
+        return f"{node.label} ({elemento})"
+
+    if elemento in graph.edges:
+        edge = graph.edges[elemento]
+        return f"{edge.id}: {edge.source} -> {edge.target}"
+
+    variaveis = _variaveis_do_elemento(
+        estrutura,
+        elemento,
+    )
+
+    if variaveis:
+        return variaveis[0].get(
+            "origem_medicao",
+            elemento,
+        )
+
+    return elemento
+
+
+def _metric_card(
+    titulo,
+    valor,
+):
+    st.metric(
+        titulo,
+        valor,
+    )
+
+
+def render_resumo_contexto_eletrico(
+    graph,
+    estrutura,
+    node_id,
+):
+    linhas = [
+        edge
+        for edge in _linhas_conectadas(
+            graph,
+            node_id,
+        )
+        if _elemento_tem_variaveis(
+            estrutura,
+            edge.id,
+        )
+    ]
+    equipamentos = _equipamentos_vinculados(
+        graph,
+        estrutura,
+        node_id,
+    )
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        _metric_card(
+            "Medicoes da barra",
+            len(
+                _variaveis_do_elemento(
+                    estrutura,
+                    node_id,
+                )
+            ),
+        )
+
+    with col2:
+        _metric_card(
+            "Linhas conectadas",
+            len(linhas),
+        )
+
+    with col3:
+        _metric_card(
+            "Equipamentos vinculados",
+            len(equipamentos),
+        )
+
+    st.caption(
+        "Tensoes sao apresentadas na barra; correntes e fluxos P/Q sao "
+        "apresentados nos ramos; geracao/injecao aparece nos equipamentos "
+        "vinculados ao barramento."
+    )
 
 
 def render_controles_prodist_rede(
@@ -395,6 +651,25 @@ def render_analise_eletrica_elemento(
     elemento_selecionado,
     key_prefix="analise_rede",
 ):
+    variaveis_elemento = _variaveis_do_elemento(
+        estrutura,
+        elemento_selecionado,
+    )
+
+    if variaveis_elemento:
+        tipo_entidade = variaveis_elemento[0].get(
+            "tipo_entidade",
+            "Elemento",
+        )
+        origem = variaveis_elemento[0].get(
+            "origem_medicao",
+            elemento_selecionado,
+        )
+
+        st.caption(
+            f"Origem da medicao: {tipo_entidade} - {origem}"
+        )
+
     tipos_disponiveis = [
         tipo
         for tipo, elementos in estrutura.items()
@@ -559,3 +834,279 @@ def render_analise_eletrica_elemento(
     render_codigo_variavel(
         variavel_info
     )
+
+
+def _series_potencia_por_fase(
+    df,
+    estrutura,
+    elemento,
+    prefixo_fase,
+):
+    series = {}
+
+    for variavel in _variaveis_do_elemento(
+        estrutura,
+        elemento,
+    ):
+        fase = variavel.get("fase")
+
+        if not fase or not fase.startswith(prefixo_fase):
+            continue
+
+        coluna = variavel["coluna_original"]
+
+        if coluna not in df.columns:
+            continue
+
+        chave_fase = fase[1:] or "total"
+        series[chave_fase] = {
+            "coluna": coluna,
+            "valores": pd.to_numeric(
+                df[coluna],
+                errors="coerce",
+            ),
+        }
+
+    return series
+
+
+def render_grandezas_derivadas(
+    df,
+    estrutura,
+    elemento,
+    rotulo_elemento,
+):
+    potencias_p = _series_potencia_por_fase(
+        df,
+        estrutura,
+        elemento,
+        "P",
+    )
+    potencias_q = _series_potencia_por_fase(
+        df,
+        estrutura,
+        elemento,
+        "Q",
+    )
+    fases = sorted(
+        set(potencias_p)
+        & set(potencias_q)
+    )
+
+    if not fases:
+        st.info(
+            "Nao ha pares P/Q suficientes para calcular potencia aparente "
+            "neste elemento."
+        )
+        return
+
+    resumo = []
+    series_s = pd.DataFrame()
+    series_s["Tempo"] = df["Tempo_EixoX"]
+
+    for fase in fases:
+        valores_s = (
+            potencias_p[fase]["valores"] ** 2
+            + potencias_q[fase]["valores"] ** 2
+        ) ** 0.5
+
+        nome_fase = f"S{fase}"
+        series_s[nome_fase] = valores_s
+
+        resumo.append(
+            {
+                "Elemento": rotulo_elemento,
+                "Grandeza derivada": nome_fase,
+                "P de origem": potencias_p[fase]["coluna"],
+                "Q de origem": potencias_q[fase]["coluna"],
+                "Media": valores_s.mean(),
+                "Minimo": valores_s.min(),
+                "Maximo": valores_s.max(),
+            }
+        )
+
+    st.subheader(
+        "Potencia Aparente Calculada"
+    )
+    st.caption(
+        "A potencia aparente S nao foi lida diretamente do arquivo CSV; "
+        "ela foi calculada por fase a partir dos pares correspondentes "
+        "de potencia ativa P e potencia reativa Q associados ao proprio "
+        "elemento selecionado."
+    )
+
+    st.line_chart(
+        series_s.set_index("Tempo")
+    )
+    st.dataframe(
+        pd.DataFrame(resumo),
+        use_container_width=True,
+    )
+
+
+def render_analise_eletrica_contexto(
+    df,
+    estrutura,
+    graph,
+    node_id,
+    key_prefix="analise_contexto",
+):
+    render_resumo_contexto_eletrico(
+        graph,
+        estrutura,
+        node_id,
+    )
+
+    aba_barra, aba_linhas, aba_equipamentos, aba_derivadas = st.tabs(
+        [
+            "Barramento",
+            "Linhas conectadas",
+            "Equipamentos conectados",
+            "Grandezas derivadas",
+        ]
+    )
+
+    with aba_barra:
+        st.caption(
+            "Medições próprias da barra selecionada, como tensões por fase."
+        )
+
+        if _elemento_tem_variaveis(
+            estrutura,
+            node_id,
+        ):
+            render_analise_eletrica_elemento(
+                df,
+                estrutura,
+                node_id,
+                key_prefix=f"{key_prefix}_barra_{node_id}",
+            )
+        else:
+            st.info(
+                "Esta barra nao possui medicoes proprias reconhecidas no CSV."
+            )
+
+    with aba_linhas:
+        linhas = [
+            edge
+            for edge in _linhas_conectadas(
+                graph,
+                node_id,
+            )
+            if _elemento_tem_variaveis(
+                estrutura,
+                edge.id,
+            )
+        ]
+
+        if not linhas:
+            st.info(
+                "Nao ha linhas conectadas com medicoes reconhecidas no CSV."
+            )
+        else:
+            linha_escolhida = st.selectbox(
+                "Linha analisada",
+                linhas,
+                format_func=lambda edge: (
+                    f"{edge.id}: {edge.source} -> {edge.target}"
+                ),
+                key=f"{key_prefix}_linha",
+            )
+
+            st.caption(
+                "Correntes e P/Q exibidos aqui pertencem ao ramo selecionado, "
+                "representando fluxo na linha."
+            )
+
+            render_analise_eletrica_elemento(
+                df,
+                estrutura,
+                linha_escolhida.id,
+                key_prefix=f"{key_prefix}_linha_{linha_escolhida.id}",
+            )
+
+    with aba_equipamentos:
+        equipamentos = _equipamentos_vinculados(
+            graph,
+            estrutura,
+            node_id,
+        )
+
+        if not equipamentos:
+            st.info(
+                "Nao ha equipamentos vinculados a este barramento com "
+                "medicoes reconhecidas no CSV."
+            )
+        else:
+            equipamento_escolhido = st.selectbox(
+                "Equipamento analisado",
+                equipamentos,
+                format_func=lambda elemento: _rotulo_elemento(
+                    graph,
+                    estrutura,
+                    elemento,
+                ),
+                key=f"{key_prefix}_equipamento",
+            )
+
+            st.caption(
+                "P/Q exibidos aqui pertencem ao equipamento, como geracao "
+                "fotovoltaica, inversor ou painel."
+            )
+
+            render_analise_eletrica_elemento(
+                df,
+                estrutura,
+                equipamento_escolhido,
+                key_prefix=f"{key_prefix}_equipamento_{equipamento_escolhido}",
+            )
+
+    with aba_derivadas:
+        opcoes_derivadas = []
+
+        for edge in _linhas_conectadas(
+            graph,
+            node_id,
+        ):
+            if _elemento_tem_variaveis(
+                estrutura,
+                edge.id,
+            ):
+                opcoes_derivadas.append(
+                    edge.id
+                )
+
+        opcoes_derivadas.extend(
+            _equipamentos_vinculados(
+                graph,
+                estrutura,
+                node_id,
+            )
+        )
+
+        if not opcoes_derivadas:
+            st.info(
+                "Nao ha elementos conectados com P/Q para calculos derivados."
+            )
+        else:
+            elemento_derivado = st.selectbox(
+                "Elemento para calculo",
+                opcoes_derivadas,
+                format_func=lambda elemento: _rotulo_elemento(
+                    graph,
+                    estrutura,
+                    elemento,
+                ),
+                key=f"{key_prefix}_derivado",
+            )
+
+            render_grandezas_derivadas(
+                df,
+                estrutura,
+                elemento_derivado,
+                _rotulo_elemento(
+                    graph,
+                    estrutura,
+                    elemento_derivado,
+                ),
+            )

@@ -27,6 +27,19 @@ EQUIPMENT_COLUMN_PATTERN = re.compile(
     r"^([^.]+)\.([^-]+)-(.+)$",
     re.IGNORECASE,
 )
+BUS_SUFFIX_PATTERN = re.compile(
+    r"^(.+)_bus(.+)$",
+    re.IGNORECASE,
+)
+
+
+def _split_target_bus(identifier):
+    match = BUS_SUFFIX_PATTERN.match(str(identifier).strip())
+
+    if not match:
+        return str(identifier), None
+
+    return match.group(1), match.group(2).lower()
 
 
 def _split_variable_unit(variable):
@@ -55,7 +68,15 @@ def _split_variable_unit(variable):
     return variable, None
 
 
-def _measurement(column, variable, value, group):
+def _measurement(
+    column,
+    variable,
+    value,
+    group,
+    target_kind=None,
+    target_id=None,
+    target_node_id=None,
+):
     variable_name, unit = _split_variable_unit(variable)
 
     return {
@@ -64,6 +85,9 @@ def _measurement(column, variable, value, group):
         "unidade": unit,
         "valor": float(value),
         "coluna_original": column,
+        "target_kind": target_kind,
+        "target_id": target_id,
+        "target_node_id": target_node_id,
     }
 
 
@@ -159,11 +183,20 @@ def load_cosim_results(uploaded_file):
         match = PV_SYSTEM_COLUMN_PATTERN.match(column)
 
         if match:
+            pv_id, target_node_id = _split_target_bus(
+                match.group(1)
+            )
+            group = f"PVSystem {pv_id}"
+
+            if target_node_id:
+                group = f"{group} (barra {target_node_id})"
+
             measurement_columns.append({
                 "column": column,
                 "target_kind": "pv",
-                "target_id": match.group(1).lower(),
-                "group": f"PVSystem {match.group(1)}",
+                "target_id": pv_id.lower(),
+                "target_node_id": target_node_id,
+                "group": group,
                 "variable": match.group(2),
             })
             continue
@@ -171,11 +204,20 @@ def load_cosim_results(uploaded_file):
         match = EQUIPMENT_COLUMN_PATTERN.match(column)
 
         if match:
+            equipment_id, target_node_id = _split_target_bus(
+                match.group(2)
+            )
+            group = f"{match.group(1)} / {equipment_id}"
+
+            if target_node_id:
+                group = f"{group} (barra {target_node_id})"
+
             measurement_columns.append({
                 "column": column,
                 "target_kind": "pv_equipment",
-                "target_id": match.group(2).lower(),
-                "group": f"{match.group(1)} / {match.group(2)}",
+                "target_id": equipment_id.lower(),
+                "target_node_id": target_node_id,
+                "group": group,
                 "variable": match.group(3),
             })
 
@@ -230,8 +272,13 @@ def apply_measurement_snapshot(graph, df, measurement_columns, row_index):
         elif item["target_kind"] == "edge":
             target = graph.edges.get(item["target_id"])
 
-        elif item["target_kind"] in {"pv", "pv_equipment"} and len(pv_nodes) == 1:
-            target = pv_nodes[0]
+        elif item["target_kind"] in {"pv", "pv_equipment"}:
+            target_node_id = item.get("target_node_id")
+
+            if target_node_id:
+                target = graph.nodes.get(target_node_id)
+            elif len(pv_nodes) == 1:
+                target = pv_nodes[0]
 
         if target is None:
             unassociated.append({
@@ -246,6 +293,9 @@ def apply_measurement_snapshot(graph, df, measurement_columns, row_index):
             item["variable"],
             value,
             item["group"],
+            item["target_kind"],
+            item["target_id"],
+            item.get("target_node_id"),
         )
         target.metadata["measurements"].append(measurement)
         associated_columns.add(item["column"])
@@ -301,8 +351,13 @@ def get_monitored_node_ids(graph, measurement_columns):
     for item in measurement_columns:
         if item["target_kind"] == "node" and item["target_id"] in graph.nodes:
             monitored.add(item["target_id"])
-        elif item["target_kind"] in {"pv", "pv_equipment"} and len(pv_nodes) == 1:
-            monitored.add(pv_nodes[0])
+        elif item["target_kind"] in {"pv", "pv_equipment"}:
+            target_node_id = item.get("target_node_id")
+
+            if target_node_id and target_node_id in graph.nodes:
+                monitored.add(target_node_id)
+            elif len(pv_nodes) == 1:
+                monitored.add(pv_nodes[0])
 
     return sorted(monitored)
 
@@ -333,8 +388,17 @@ def prepare_node_time_series(
             and len(pv_nodes) == 1
             and pv_nodes[0] == node_id
         )
+        belongs_to_explicit_bus = (
+            item["target_kind"] in {"pv", "pv_equipment"}
+            and item.get("target_node_id") == node_id
+            and node_id in graph.nodes
+        )
 
-        if not belongs_to_node and not belongs_to_single_pv:
+        if (
+            not belongs_to_node
+            and not belongs_to_single_pv
+            and not belongs_to_explicit_bus
+        ):
             continue
 
         variable, unit = _split_variable_unit(item["variable"])

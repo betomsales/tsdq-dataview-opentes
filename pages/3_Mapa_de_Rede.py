@@ -22,7 +22,7 @@ from modules.network.element_inspector import (
 from components.analise_eletrica_rede import (
     montar_estrutura_analise_rede,
     preparar_dataframe_analise,
-    render_analise_eletrica_elemento,
+    render_analise_eletrica_contexto,
 )
 from components.cards_qee import (
     render_cards_qee,
@@ -378,9 +378,10 @@ if graph is not None:
                     and analysis_structure is not None
                 ):
 
-                    render_analise_eletrica_elemento(
+                    render_analise_eletrica_contexto(
                         analysis_df,
                         analysis_structure,
+                        graph,
                         selected_node,
                         key_prefix=f"analise_rede_{selected_node}",
                     )
