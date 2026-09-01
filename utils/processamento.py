@@ -62,7 +62,10 @@ def preparar_serie_temporal(
         "unidade_detectada"
     )
 
-    label_y = tipo
+    label_y = variavel_info.get(
+        "rotulo_variavel",
+        tipo,
+    )
 
     if unidade:
         label_y += f" [{unidade}]"
@@ -96,7 +99,11 @@ def preparar_multiplas_series(
             "coluna_original"
         ]
 
-        nome_coluna = coluna
+        nome_coluna = variavel.get(
+            "rotulo_serie"
+        ) or variavel.get(
+            "rotulo_card"
+        ) or coluna
 
         df_multiserie[
             nome_coluna

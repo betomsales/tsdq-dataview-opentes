@@ -29,6 +29,13 @@ def normalizar_unidade(unidade):
         "a": "A",
         "ka": "kA",
 
+        "c": "°C",
+        "°c": "°C",
+        "celsius": "°C",
+        "wm2": "W/m²",
+        "w/m2": "W/m²",
+        "w/m²": "W/m²",
+
         "hz": "Hz",
         "%": "%"
     }
@@ -37,6 +44,58 @@ def normalizar_unidade(unidade):
         unidade.lower(),
         unidade
     )
+
+
+def inferir_unidade_variavel(
+    variavel,
+    target_kind=None,
+):
+    """
+    Infere a unidade quando a coluna informa a grandeza, mas não a unidade.
+    """
+
+    if not variavel:
+        return None
+
+    variavel_normalizada = str(
+        variavel
+    ).strip().lower()
+
+    unidades_por_variavel = {
+        "p_meas": "W",
+        "p_ac": "W",
+        "p_dc": "W",
+        "q_meas": "var",
+        "q_ac": "var",
+        "temperature": "°C",
+        "temperatura": "°C",
+        "irradiance": "W/m²",
+        "irradiancia": "W/m²",
+        "irradiância": "W/m²",
+    }
+
+    if variavel_normalizada in unidades_por_variavel:
+        return unidades_por_variavel[variavel_normalizada]
+
+    if (
+        target_kind in {"pv", "pv_equipment"}
+        and (
+            variavel_normalizada.startswith("p_")
+            or variavel_normalizada in {"p", "p1", "p2", "p3"}
+        )
+    ):
+        return "W"
+
+    if (
+        target_kind in {"pv", "pv_equipment"}
+        and (
+            variavel_normalizada.startswith("q_")
+            or variavel_normalizada in {"q", "q1", "q2", "q3"}
+        )
+    ):
+        return "var"
+
+    return None
 
 
 def remover_unidade_do_tipo(tipo_variavel):

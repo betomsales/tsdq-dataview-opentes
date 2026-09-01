@@ -7,7 +7,7 @@ from utils.comunicacao import classificar_agente
 
 def render_cards_comunicacao(kpis):
     """
-    Renderiza indicadores principais da comunicacao.
+    Renderiza indicadores principais da comunicação.
     """
 
     col1, col2, col3, col4 = st.columns(4)
@@ -52,20 +52,20 @@ def render_cards_comunicacao(kpis):
 
     with col7:
         st.metric(
-            "Latencia media",
+            "Latência média",
             f"{kpis['latencia_media']:.4f} s"
         )
 
     with col8:
         st.metric(
-            "Jitter medio",
+            "Jitter médio",
             f"{kpis['jitter_medio']:.4f} s"
         )
 
 
 def _preparar_classes(df_expandido):
     """
-    Adiciona classificacao visual dos agentes.
+    Adiciona classificação visual dos agentes.
     """
 
     df_plot = df_expandido.copy()
@@ -80,7 +80,7 @@ def _preparar_classes(df_expandido):
 
 def render_grafico_latencia(df_expandido):
     """
-    Renderiza latencia por mensagem.
+    Renderiza latência por mensagem.
     """
 
     df_plot = _preparar_classes(
@@ -99,9 +99,9 @@ def render_grafico_latencia(df_expandido):
             "Jitter"
         ],
         labels={
-            "Latencia": "Latencia (s)"
+            "Latencia": "Latência (s)"
         },
-        title="Latencia temporal por pacote"
+        title="Latência temporal por pacote"
     )
 
     resumo = (
@@ -120,7 +120,7 @@ def render_grafico_latencia(df_expandido):
                 x=resumo["Tempo"],
                 y=resumo["Latencia_media"],
                 mode="lines",
-                name="Media",
+                name="Média",
                 line={
                     "color": "gray",
                     "dash": "dash"
@@ -159,7 +159,7 @@ def render_grafico_jitter(df_expandido):
         labels={
             "Jitter": "Jitter (s)"
         },
-        title="Jitter distribuido por pacote"
+        title="Jitter distribuído por pacote"
     )
 
     st.plotly_chart(
@@ -202,13 +202,13 @@ def render_grafico_payload(df_expandido):
 
 def render_grafico_confiabilidade(kpis):
     """
-    Renderiza distribuicao de pacotes.
+    Renderiza distribuição de pacotes.
     """
 
     labels = [
         "Entregues",
         "Dropados",
-        "Em transito"
+        "Em trânsito"
     ]
 
     valores = [
@@ -226,7 +226,7 @@ def render_grafico_confiabilidade(kpis):
     if not dados:
 
         st.info(
-            "Nao ha dados suficientes para calcular a confiabilidade."
+            "Não há dados suficientes para calcular a confiabilidade."
         )
 
         return

@@ -21,7 +21,7 @@ def _normalizar_colunas(df):
 
 def _obter_extensao(uploaded_file):
     """
-    Retorna a extensao do arquivo carregado.
+    Retorna a extensão do arquivo carregado.
     """
 
     nome = getattr(
@@ -334,7 +334,7 @@ def ler_dados(uploaded_file):
         )
 
     raise ValueError(
-        "Formato nao suportado. Use CSV, H5 ou HDF5."
+        "Formato não suportado. Use CSV, H5 ou HDF5."
     )
 
 

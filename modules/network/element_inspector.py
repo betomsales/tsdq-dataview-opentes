@@ -3,35 +3,37 @@ from html import escape
 
 import streamlit as st
 
+from utils.rotulos_medicoes import obter_rotulo_variavel
+
 
 NODE_INFO = {
     "refbus": {
-        "titulo": "Subestacao / Fonte",
-        "descricao": "Representa o ponto de suprimento de energia do circuito.",
+        "titulo": "Subestação / Fonte",
+        "descricao": "Ponto de suprimento",
     },
     "load": {
         "titulo": "Carga",
-        "descricao": "Barramento associado ao consumo de energia eletrica.",
+        "descricao": "Consumo conectado",
     },
     "pv": {
-        "titulo": "Geracao Distribuida",
-        "descricao": "Barramento com geracao de energia associada.",
+        "titulo": "Geração Distribuída",
+        "descricao": "Geração associada",
     },
     "regulator_bus": {
         "titulo": "Barramento Regulado",
-        "descricao": "Associado a um regulador de tensao da rede.",
+        "descricao": "Regulação de tensão",
     },
     "virtual_bus": {
         "titulo": "Barramento Virtual",
-        "descricao": "Criado pelo modelo para representar um ponto intermediario da rede.",
+        "descricao": "Nó intermediário",
     },
     "transformer_bus": {
         "titulo": "Conectado a Transformador",
-        "descricao": "Barramento conectado a transformadores.",
+        "descricao": "Ligação ao transformador",
     },
     "bus": {
         "titulo": "Barramento Comum",
-        "descricao": "Barramento utilizado para interligacao dos elementos da rede.",
+        "descricao": "Interligação da rede",
     },
 }
 
@@ -83,22 +85,12 @@ def _is_power_measurement(measurement):
 
 
 def _measurement_label(measurement):
+    if measurement.get("rotulo_variavel"):
+        return measurement["rotulo_variavel"]
+
     variable = str(
         measurement.get("variavel", "")
     )
-
-    known_labels = {
-        "P_meas": "Potencia medida",
-        "Q_meas": "Potencia reativa medida",
-        "P_ac": "Potencia AC",
-        "Q_ac": "Potencia reativa AC",
-        "P_dc": "Potencia DC",
-        "temperature": "Temperatura",
-        "irradiance": "Irradiancia",
-    }
-
-    if variable in known_labels:
-        return known_labels[variable]
 
     phase_match = re.match(
         r"^[A-Za-z]+([123ABC])$",
@@ -109,9 +101,8 @@ def _measurement_label(measurement):
     if phase_match:
         return f"Fase {phase_match.group(1).upper()}"
 
-    return variable.replace(
-        "_",
-        " ",
+    return obter_rotulo_variavel(
+        variable
     )
 
 
@@ -125,10 +116,12 @@ def _measurement_context_label(measurement, category):
 
     if (
         _is_equipment_measurement(measurement)
-        and _is_power_measurement(measurement)
         and source
     ):
-        return f"{source} - {label}"
+        return measurement.get(
+            "nome_curto_elemento",
+            source,
+        )
 
     if (
         _is_edge_measurement(measurement)
@@ -152,24 +145,51 @@ def _measurement_category(measurement):
         variable,
         re.IGNORECASE,
     )
+    category_by_equipment = measurement.get(
+        "categoria_card"
+    )
+
+    if _is_equipment_measurement(measurement) and category_by_equipment:
+        equipment_cards = {
+            "Potência DC dos Painéis": ("#e67e22", 40),
+            "Potência Ativa AC dos Inversores": ("#d35400", 45),
+            "Potência Reativa AC dos Inversores": ("#16a085", 50),
+            "Potência Ativa do PVSystem": ("#f39c12", 55),
+            "Potência Reativa do PVSystem": ("#1abc9c", 60),
+            "Temperatura dos Painéis": ("#c0392b", 70),
+            "Irradiância dos Painéis": ("#27ae60", 80),
+            "Dados dos Painéis": ("#7f8c8d", 90),
+            "Dados dos Inversores": ("#7f8c8d", 90),
+            "Dados do PVSystem": ("#7f8c8d", 90),
+        }
+        color, order = equipment_cards.get(
+            category_by_equipment,
+            ("#7f8c8d", 90),
+        )
+
+        return (
+            category_by_equipment,
+            color,
+            order,
+        )
 
     if variable.startswith("V") or unit in {"pu", "v", "kv"}:
         return (
-            "Tensao",
+            "Tensão",
             "#f1c40f",
             10,
         )
 
-    if "IRRADIANCE" in variable or "IRRADIANCIA" in variable:
+    if "IRRADIANCE" in variable or "IRRADIÂNCIA" in variable:
         return (
-            "Irradiancia",
+            "Irradiância",
             "#27ae60",
             70,
         )
 
     if is_current_phase and unit == "graus":
         return (
-            "Angulo das Correntes",
+            "Ângulo das Correntes",
             "#9b59b6",
             30,
         )
@@ -184,20 +204,20 @@ def _measurement_category(measurement):
     if variable.startswith("P") or unit in {"w", "kw", "mw"}:
         if _is_equipment_measurement(measurement):
             return (
-                "Potencia Ativa - Equipamentos Conectados",
+                "Potência Ativa - Equipamentos Conectados",
                 "#e67e22",
                 40,
             )
 
         if _is_edge_measurement(measurement):
             return (
-                "Fluxo de Potencia Ativa",
+                "Fluxo de Potência Ativa",
                 "#e67e22",
                 40,
             )
 
         return (
-            "Potencia Ativa",
+            "Potência Ativa",
             "#e67e22",
             40,
         )
@@ -205,20 +225,20 @@ def _measurement_category(measurement):
     if variable.startswith("Q") or unit in {"var", "kvar", "mvar"}:
         if _is_equipment_measurement(measurement):
             return (
-                "Potencia Reativa - Equipamentos Conectados",
+                "Potência Reativa - Equipamentos Conectados",
                 "#16a085",
                 50,
             )
 
         if _is_edge_measurement(measurement):
             return (
-                "Fluxo de Potencia Reativa",
+                "Fluxo de Potência Reativa",
                 "#16a085",
                 50,
             )
 
         return (
-            "Potencia Reativa",
+            "Potência Reativa",
             "#16a085",
             50,
         )
@@ -231,7 +251,7 @@ def _measurement_category(measurement):
         )
 
     return (
-        "Outras medicoes",
+        "Outras medições",
         "#7f8c8d",
         90,
     )
@@ -246,7 +266,7 @@ def _render_card(
     if not rows:
         content = (
             '<p style="color:gray;margin:0;font-size:1rem;">'
-            "Nao identificado"
+            "Não identificado"
             "</p>"
         )
     else:
@@ -260,7 +280,8 @@ def _render_card(
                 f"{escape(str(label))}"
                 "</span>"
                 '<span style="font-size:1.15rem;font-weight:bold;'
-                'color:#111827;text-align:right;overflow-wrap:anywhere;">'
+                'color:#111827;text-align:right;white-space:nowrap;'
+                'flex-shrink:0;">'
                 f"{escape(str(value))}"
                 "</span>"
                 "</div>"
@@ -301,7 +322,7 @@ def _render_measurements(
             measurement
         )
 
-        if not include_voltage and title == "Tensao":
+        if not include_voltage and title == "Tensão":
             continue
 
         measurement_cards.setdefault(
@@ -324,7 +345,7 @@ def _render_measurements(
 
     if not measurement_cards:
         _render_card(
-            "Outras medicoes",
+            "Outras medições",
             None,
             "#7f8c8d",
             "120px",
@@ -407,7 +428,7 @@ def render_node_details(
     node = graph.nodes.get(node_id)
 
     if node is None:
-        st.warning("Barramento nao encontrado.")
+        st.warning("Barramento não encontrado.")
         return
 
     node_info = NODE_INFO.get(
@@ -427,8 +448,8 @@ def render_node_details(
 
     info_rows = [
         ("Classe", node_info["titulo"]),
-        ("Descricao", node_info["descricao"]),
-        ("Conexoes", len(neighbors)),
+        ("Descrição", node_info["descricao"]),
+        ("Conexões", len(neighbors)),
     ]
 
     voltage_rows = [
@@ -442,7 +463,7 @@ def render_node_details(
     if node.voltage_pu is not None:
         voltage_rows.append(
             (
-                "Media",
+                "Média",
                 f"{node.voltage_pu:.6f} pu",
             )
         )
@@ -466,7 +487,7 @@ def render_node_details(
 
     with col_voltage:
         _render_card(
-            "Tensao da Barra",
+            "Tensão da Barra",
             voltage_rows,
             "#f1c40f",
         )
@@ -482,10 +503,10 @@ def render_node_details(
 
     if _has_equipment_power_measurements(measurements):
         st.caption(
-            "As potencias exibidas neste barramento pertencem aos equipamentos "
-            "conectados a ele, nao a barra como grandeza propria. Valores "
-            "positivos indicam injecao apenas se essa for a convencao adotada "
-            "pela co-simulacao."
+            "As potências exibidas neste barramento pertencem aos equipamentos "
+            "conectados a ele, não à barra como grandeza própria. Valores "
+            "positivos indicam injeção apenas se essa for a convenção adotada "
+            "pela co-simulação."
         )
 
     _render_measurements(

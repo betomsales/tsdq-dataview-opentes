@@ -28,7 +28,7 @@ st.title("Comunicação")
 
 st.markdown(
     """
-    Modulo para análise dos resultados de comunicação
+    Módulo para análise dos resultados de comunicação
     provenientes da co-simulação.
     """
 )
@@ -42,7 +42,7 @@ uploaded_file = render_upload(
 if uploaded_file is None:
 
     st.info(
-        "Carregue um arquivo CSV para iniciar a analise de comunicação."
+        "Carregue um arquivo CSV para iniciar a análise de comunicação."
     )
 
     st.stop()
@@ -80,7 +80,7 @@ origens = listar_origens(
 if not origens:
 
     st.warning(
-        "Nenhuma origem de comunicacao foi encontrada no arquivo."
+        "Nenhuma origem de comunicação foi encontrada no arquivo."
     )
 
     st.stop()

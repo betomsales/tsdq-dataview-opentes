@@ -19,7 +19,7 @@ ATRIBUTOS_PACOTES = [
 
 def ler_resultados_comunicacao(uploaded_file):
     """
-    Le arquivo CSV de resultados da comunicacao.
+    Lê arquivo CSV de resultados da comunicação.
     """
 
     uploaded_file.seek(0)
@@ -36,7 +36,7 @@ def ler_resultados_comunicacao(uploaded_file):
 
 def validar_resultados_comunicacao(df):
     """
-    Valida estrutura minima do CSV da comunicacao.
+    Valida estrutura mínima do CSV da comunicação.
     """
 
     erros = []
@@ -50,7 +50,7 @@ def validar_resultados_comunicacao(df):
     if colunas_ausentes:
 
         erros.append(
-            "Colunas obrigatorias ausentes: "
+            "Colunas obrigatórias ausentes: "
             + ", ".join(colunas_ausentes)
         )
 
@@ -59,7 +59,7 @@ def validar_resultados_comunicacao(df):
 
 def listar_origens(df):
     """
-    Lista origens disponiveis no arquivo.
+    Lista origens disponíveis no arquivo.
     """
 
     if "Origem" not in df.columns:
@@ -156,7 +156,7 @@ def _dividir_valores(valor):
 
 def _valor_float(lista, indice):
     """
-    Retorna item numerico de uma lista multiplexada.
+    Retorna item numérico de uma lista multiplexada.
     """
 
     if indice >= len(lista):
@@ -228,21 +228,21 @@ def expandir_mensagens(time_data):
 
 def classificar_agente(agente):
     """
-    Classifica agentes para visualizacao de topologia estrela.
+    Classifica agentes para visualização de topologia estrela.
     """
 
     if agente == "AgenteCentral":
         return "Central"
 
     if str(agente).startswith("AgenteP_"):
-        return "Periferico"
+        return "Periférico"
 
     return "Rede"
 
 
 def calcular_kpis(time_data, df_expandido):
     """
-    Calcula indicadores globais da comunicacao.
+    Calcula indicadores globais da comunicação.
     """
 
     enviados = (

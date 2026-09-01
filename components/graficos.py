@@ -273,7 +273,10 @@ def render_grafico_individual(
         df_plot,
         x="Tempo",
         y="Valor",
-        title=coluna_real
+        title=variavel_info.get(
+            "rotulo_serie",
+            coluna_real,
+        )
     )
 
     if (

@@ -26,7 +26,7 @@ def card_qee(
             margin:0;
             font-size:1rem;
         ">
-            Nao identificado
+            Não identificado
         </p>
         """
         cor = "#7f8c8d"
@@ -47,18 +47,20 @@ def card_qee(
                 )
 
             if valor is None:
-                valor_str = "Nao identificado"
+                valor_str = "Não identificado"
             else:
                 valor_str = f"{valor:.4f}"
 
             linha = (
                 f"<div style='display:flex;"
                 f"justify-content:space-between;"
+                f"gap:1rem;"
                 f"margin-bottom:0.3rem;'>"
-                f"<span style='font-size:{tamanho_fase};'>"
+                f"<span style='font-size:{tamanho_fase};line-height:1.35;'>"
                 f"{fase}"
                 f"</span>"
-                f"<span style='font-size:{tamanho_valor};font-weight:bold;'>"
+                f"<span style='font-size:{tamanho_valor};font-weight:bold;"
+                f"white-space:nowrap;flex-shrink:0;'>"
                 f"{valor_str} "
                 f"{unidade or ''}"
                 f"</span>"
@@ -105,7 +107,21 @@ def _filtrar_por_elemento(
     return [
         variavel
         for variavel in variaveis
-        if variavel["elemento"] == elemento_referencia
+        if (
+            variavel["elemento"] == elemento_referencia
+            or variavel.get("target_node_id") == elemento_referencia
+        )
+    ]
+
+
+def _filtrar_por_categoria(
+    variaveis,
+    categoria,
+):
+    return [
+        variavel
+        for variavel in variaveis
+        if variavel.get("categoria_card") == categoria
     ]
 
 
@@ -121,7 +137,7 @@ def render_cards_qee(
     )
 
     st.subheader(
-        "Configuracao QEE"
+        "Configuração QEE"
     )
 
     opcoes_tensao = []
@@ -134,7 +150,7 @@ def render_cards_qee(
 
     if not opcoes_tensao:
         st.warning(
-            "Nenhuma variavel de tensao foi identificada para calculo de QEE."
+            "Nenhuma variável de tensão foi identificada para cálculo de QEE."
         )
         return
 
@@ -142,13 +158,13 @@ def render_cards_qee(
         tensao_referencia = elemento_referencia
     elif permitir_selecao:
         tensao_referencia = st.selectbox(
-            "Tensao de referencia",
+            "Tensão de referência",
             opcoes_tensao,
             key=f"{key_prefix}_tensao_referencia",
         )
     else:
         st.info(
-            "O barramento selecionado nao possui tensoes reconhecidas para QEE."
+            "O barramento selecionado não possui tensões reconhecidas para QEE."
         )
         return
 
@@ -175,26 +191,80 @@ def render_cards_qee(
             filtro_elemento,
         ),
     )
+    variaveis_potencia_ativa = _filtrar_por_elemento(
+        variaveis_qee["potencia_ativa"],
+        filtro_elemento,
+    )
+    variaveis_potencia_reativa = _filtrar_por_elemento(
+        variaveis_qee["potencia_reativa"],
+        filtro_elemento,
+    )
+    variaveis_potencia_fv = _filtrar_por_elemento(
+        variaveis_qee["potencia_fv"],
+        filtro_elemento,
+    )
+    variaveis_temperatura_pv = _filtrar_por_elemento(
+        variaveis_qee["temperatura_pv"],
+        filtro_elemento,
+    )
+    variaveis_irradiancia = _filtrar_por_elemento(
+        variaveis_qee["irradiancia"],
+        filtro_elemento,
+    )
     dados_potencia_ativa = montar_card_fases(
         df,
-        _filtrar_por_elemento(
-            variaveis_qee["potencia_ativa"],
-            filtro_elemento,
-        ),
+        variaveis_potencia_ativa,
     )
     dados_potencia_reativa = montar_card_fases(
         df,
-        _filtrar_por_elemento(
-            variaveis_qee["potencia_reativa"],
-            filtro_elemento,
-        ),
+        variaveis_potencia_reativa,
     )
     dados_potencia_fv = montar_card_fases(
         df,
-        _filtrar_por_elemento(
-            variaveis_qee["potencia_fv"],
-            filtro_elemento,
+        variaveis_potencia_fv,
+    )
+    dados_potencia_dc_paineis = montar_card_fases(
+        df,
+        _filtrar_por_categoria(
+            variaveis_potencia_fv,
+            "Potência DC dos Painéis",
         ),
+    )
+    dados_potencia_ativa_ac_inversores = montar_card_fases(
+        df,
+        _filtrar_por_categoria(
+            variaveis_potencia_fv,
+            "Potência Ativa AC dos Inversores",
+        ),
+    )
+    dados_potencia_ativa_pvsystem = montar_card_fases(
+        df,
+        _filtrar_por_categoria(
+            variaveis_potencia_fv,
+            "Potência Ativa do PVSystem",
+        ),
+    )
+    dados_potencia_reativa_ac_inversores = montar_card_fases(
+        df,
+        _filtrar_por_categoria(
+            variaveis_potencia_reativa,
+            "Potência Reativa AC dos Inversores",
+        ),
+    )
+    dados_potencia_reativa_pvsystem = montar_card_fases(
+        df,
+        _filtrar_por_categoria(
+            variaveis_potencia_reativa,
+            "Potência Reativa do PVSystem",
+        ),
+    )
+    dados_temperatura_pv = montar_card_fases(
+        df,
+        variaveis_temperatura_pv,
+    )
+    dados_irradiancia = montar_card_fases(
+        df,
+        variaveis_irradiancia,
     )
     dados_potencia_gerador = montar_card_fases(
         df,
@@ -241,14 +311,14 @@ def render_cards_qee(
 
     with linha1_col1:
         card_qee(
-            "Tensao Media",
+            "Tensão Média",
             dados_tensao,
             "#f1c40f",
         )
 
     with linha1_col2:
         card_qee(
-            "Desequilibrio",
+            "Desequilíbrio",
             (
                 {
                     "Global": {
@@ -310,7 +380,7 @@ def render_cards_qee(
 
         with col_t1:
             card_qee(
-                "Tensao Minima Trifasica",
+                "Tensão Mínima Trifásica",
                 {
                     "Global": {
                         "valor": indicadores_temporais["minimo"],
@@ -322,7 +392,7 @@ def render_cards_qee(
 
         with col_t2:
             card_qee(
-                "Tensao Maxima Trifasica",
+                "Tensão Máxima Trifásica",
                 {
                     "Global": {
                         "valor": indicadores_temporais["maximo"],
@@ -334,7 +404,7 @@ def render_cards_qee(
 
         with col_t3:
             card_qee(
-                "Tensao Media Trifasica",
+                "Tensão Média Trifásica",
                 {
                     "Global": {
                         "valor": indicadores_temporais["media"],
@@ -346,7 +416,7 @@ def render_cards_qee(
 
         with col_t4:
             card_qee(
-                "Desvio Padrao",
+                "Desvio Padrão",
                 {
                     "Global": {
                         "valor": indicadores_temporais["desvio"],
@@ -364,41 +434,57 @@ def render_cards_qee(
 
     with col_g1:
         card_qee(
-            "Potencia Ativa",
-            dados_potencia_ativa,
+            "Potência DC dos Painéis",
+            dados_potencia_dc_paineis,
             "#e67e22",
         )
         card_qee(
-            "Potencia Reativa",
-            dados_potencia_reativa,
-            "#16a085",
+            "Potência Ativa AC dos Inversores",
+            dados_potencia_ativa_ac_inversores,
+            "#d35400",
         )
 
     with col_g2:
         card_qee(
-            "Potencia FV",
-            dados_potencia_fv,
-            "#27ae60",
+            "Potência Reativa AC dos Inversores",
+            dados_potencia_reativa_ac_inversores,
+            "#16a085",
         )
         card_qee(
-            "Potencia do Gerador",
-            dados_potencia_gerador,
-            "#c0392b",
+            "Potência Ativa do PVSystem",
+            dados_potencia_ativa_pvsystem,
+            "#f39c12",
+        )
+        card_qee(
+            "Potência Reativa do PVSystem",
+            dados_potencia_reativa_pvsystem,
+            "#1abc9c",
         )
 
     with col_g3:
+        card_qee(
+            "Temperatura dos Painéis",
+            dados_temperatura_pv,
+            "#c0392b",
+        )
+        card_qee(
+            "Irradiância dos Painéis",
+            dados_irradiancia,
+            "#27ae60",
+        )
         card_qee(
             "Corrente",
             dados_corrente,
             "#3498db",
         )
         card_qee(
-            "Fator de Potencia",
+            "Fator de Potência",
             dados_fp,
             "#f39c12",
         )
         card_qee(
-            "Frequencia",
+            "Frequência",
             dados_frequencia,
             "#8e44ad",
         )
+

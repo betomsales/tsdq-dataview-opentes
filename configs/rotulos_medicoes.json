@@ -1,0 +1,38 @@
+{
+  "variaveis": {
+    "P_meas": {
+      "rotulo": "Potência ativa medida",
+      "unidade": "W"
+    },
+    "Q_meas": {
+      "rotulo": "Potência reativa medida",
+      "unidade": "var"
+    },
+    "P_ac": {
+      "rotulo": "Potência ativa AC do inversor",
+      "unidade": "W"
+    },
+    "Q_ac": {
+      "rotulo": "Potência reativa AC do inversor",
+      "unidade": "var"
+    },
+    "P_dc": {
+      "rotulo": "Potência DC do painel",
+      "unidade": "W"
+    },
+    "temperature": {
+      "rotulo": "Temperatura do painel",
+      "unidade": "°C"
+    },
+    "irradiance": {
+      "rotulo": "Irradiância",
+      "unidade": "W/m²"
+    }
+  },
+  "entidades": {
+    "pv": "PVSystem",
+    "pv_equipment": "Equipamento fotovoltaico",
+    "node": "Barramento",
+    "edge": "Ramo"
+  }
+}

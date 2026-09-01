@@ -3,6 +3,14 @@ import re
 
 import pandas as pd
 
+from utils.rotulos_medicoes import (
+    obter_categoria_equipamento,
+    obter_nome_curto_elemento,
+    obter_rotulo_variavel,
+    obter_unidade_configurada,
+)
+from utils.unidades import inferir_unidade_variavel, normalizar_unidade
+
 from .graph_model import NetworkEdge, NetworkGraph, NetworkNode
 
 
@@ -58,12 +66,18 @@ def _split_variable_unit(variable):
         "mvar": "Mvar",
         "v": "V",
         "kv": "kV",
+        "c": "°C",
+        "celsius": "°C",
+        "wm2": "W/m²",
+        "w/m2": "W/m²",
     }
 
     parts = variable.rsplit("_", 1)
 
     if len(parts) == 2 and parts[1].lower() in suffix_units:
-        return parts[0], suffix_units[parts[1].lower()]
+        return parts[0], normalizar_unidade(
+            suffix_units[parts[1].lower()]
+        )
 
     return variable, None
 
@@ -78,11 +92,33 @@ def _measurement(
     target_node_id=None,
 ):
     variable_name, unit = _split_variable_unit(variable)
+    unit = (
+        normalizar_unidade(unit)
+        or obter_unidade_configurada(variable_name)
+        or inferir_unidade_variavel(
+            variable_name,
+            target_kind,
+        )
+    )
+    unit = normalizar_unidade(
+        unit
+    )
 
     return {
         "grupo": group,
         "variavel": variable_name,
         "unidade": unit,
+        "rotulo_variavel": obter_rotulo_variavel(
+            variable_name
+        ),
+        "nome_curto_elemento": obter_nome_curto_elemento(
+            target_id,
+            group,
+        ),
+        "categoria_card": obter_categoria_equipamento(
+            variable_name,
+            target_id,
+        ),
         "valor": float(value),
         "coluna_original": column,
         "target_kind": target_kind,
@@ -92,7 +128,7 @@ def _measurement(
 
 
 def load_topology_json(uploaded_file):
-    """Converte o JSON exportado pela co-simulacao em NetworkGraph."""
+    """Converte o JSON exportado pela co-simulação em NetworkGraph."""
 
     uploaded_file.seek(0)
     raw = uploaded_file.read()
@@ -127,7 +163,7 @@ def load_topology_json(uploaded_file):
 
         if source not in graph.nodes or target not in graph.nodes:
             raise ValueError(
-                f"A conexao '{item.get('id', '')}' referencia um no inexistente."
+                f"A conexão '{item.get('id', '')}' referencia um nó inexistente."
             )
 
         graph.add_edge(
@@ -144,14 +180,14 @@ def load_topology_json(uploaded_file):
 
 
 def load_cosim_results(uploaded_file):
-    """Le o CSV e cataloga todas as series por elemento da co-simulacao."""
+    """Lê o CSV e cataloga todas as séries por elemento da co-simulação."""
 
     uploaded_file.seek(0)
     df = pd.read_csv(uploaded_file)
     df.columns = df.columns.astype(str).str.strip()
 
     if df.empty:
-        raise ValueError("O CSV de resultados nao possui registros.")
+        raise ValueError("O CSV de resultados não possui registros.")
 
     measurement_columns = []
 
@@ -223,7 +259,7 @@ def load_cosim_results(uploaded_file):
 
     if not measurement_columns:
         raise ValueError(
-            "Nenhuma coluna de medicao reconhecida foi encontrada no CSV."
+            "Nenhuma coluna de medição reconhecida foi encontrada no CSV."
         )
 
     time_column = df.columns[0]
@@ -237,7 +273,7 @@ def load_cosim_results(uploaded_file):
 
 
 def apply_measurement_snapshot(graph, df, measurement_columns, row_index):
-    """Aplica todas as medicoes reconhecidas aos seus elementos no grafo."""
+    """Aplica todas as medições reconhecidas aos seus elementos no grafo."""
 
     row = df.iloc[row_index]
     measured_nodes = set()
@@ -284,7 +320,7 @@ def apply_measurement_snapshot(graph, df, measurement_columns, row_index):
             unassociated.append({
                 "coluna_original": item["column"],
                 "valor": float(value),
-                "motivo": "Elemento correspondente nao encontrado na topologia",
+                "motivo": "Elemento correspondente não encontrado na topologia",
             })
             continue
 
@@ -328,7 +364,7 @@ def apply_measurement_snapshot(graph, df, measurement_columns, row_index):
 
 
 def apply_voltage_snapshot(graph, df, measurement_columns, row_index):
-    """Compatibilidade com chamadas anteriores; agora aplica todas as medicoes."""
+    """Compatibilidade com chamadas anteriores; agora aplica todas as medições."""
 
     stats = apply_measurement_snapshot(
         graph,
@@ -340,7 +376,7 @@ def apply_voltage_snapshot(graph, df, measurement_columns, row_index):
 
 
 def get_monitored_node_ids(graph, measurement_columns):
-    """Retorna somente nos que possuem ao menos uma coluna real no CSV."""
+    """Retorna somente nós que possuem ao menos uma coluna real no CSV."""
 
     monitored = set()
     pv_nodes = [
@@ -402,12 +438,26 @@ def prepare_node_time_series(
             continue
 
         variable, unit = _split_variable_unit(item["variable"])
+        unit = (
+            normalizar_unidade(unit)
+            or obter_unidade_configurada(variable)
+            or inferir_unidade_variavel(
+                variable,
+                item["target_kind"],
+            )
+        )
+        unit = normalizar_unidade(
+            unit
+        )
         values = pd.to_numeric(df[item["column"]], errors="coerce")
 
         series.append({
             "grupo": item["group"],
             "variavel": variable,
             "unidade": unit,
+            "rotulo_variavel": obter_rotulo_variavel(
+                variable
+            ),
             "coluna_original": item["column"],
             "tempo": time_values.copy(),
             "valores": values,

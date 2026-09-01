@@ -28,6 +28,8 @@ def identificar_variaveis_qee(
         "potencia_reativa": [],
         "potencia_fv": [],
         "potencia_gerador": [],
+        "temperatura_pv": [],
+        "irradiancia": [],
         "fp": [],
         "frequencia": [],
     }
@@ -64,6 +66,14 @@ def identificar_variaveis_qee(
                     )
                 elif "fotovoltaica" in nome_tipo:
                     resultado["potencia_fv"].append(
+                        variavel
+                    )
+                elif "temperatura" in nome_tipo:
+                    resultado["temperatura_pv"].append(
+                        variavel
+                    )
+                elif "irradiancia" in nome_tipo:
+                    resultado["irradiancia"].append(
                         variavel
                     )
                 elif "gerador" in nome_tipo:
@@ -103,7 +113,15 @@ def montar_card_fases(
         valor = serie.mean()
 
         if fase is None:
-            fase = "Total"
+            fase = variavel.get(
+                "rotulo_card",
+                "Total",
+            )
+        elif (
+            variavel.get("target_kind") in {"pv", "pv_equipment"}
+            and variavel.get("rotulo_card")
+        ):
+            fase = f"{variavel['rotulo_card']} - {fase}"
 
         resultado[fase] = {
             "valor": valor,

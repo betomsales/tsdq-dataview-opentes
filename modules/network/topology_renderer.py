@@ -14,7 +14,7 @@ from .topology_styles import (
 
 
 def get_voltage_color(voltage_pu):
-    """Cor do no segundo as faixas de tensao usadas no painel QEE."""
+    """Cor do nó segundo as faixas de tensão usadas no painel QEE."""
 
     if voltage_pu is None:
         return None
@@ -63,7 +63,7 @@ def render_graph(
                 title=(
                     f"{node.label}: {node.voltage_pu:.6f} pu"
                     if node.voltage_pu is not None
-                    else f"{node.label}: sem medicao"
+                    else f"{node.label}: sem medição"
                 ),
 
                 borderWidth=6,
@@ -98,15 +98,19 @@ def render_graph(
 def render_node_time_series(node_id, series):
     """Plota apenas amostras existentes nas colunas originais do CSV."""
 
-    st.subheader(f"Serie temporal do no {node_id}")
+    st.subheader(f"Série temporal do nó {node_id}")
     st.caption(
         "As curvas usam diretamente os registros do arquivo de entrada. "
-        "Valores ausentes nao sao interpolados nem substituidos."
+        "Valores ausentes não são interpolados nem substituídos."
     )
     grouped = {}
 
     for item in series:
-        separate_variable = item["variavel"] if item["unidade"] is None else None
+        rotulo_variavel = item.get(
+            "rotulo_variavel",
+            item["variavel"],
+        )
+        separate_variable = rotulo_variavel if item["unidade"] is None else None
         key = (item["grupo"], item["unidade"], separate_variable)
         grouped.setdefault(key, []).append(item)
 
@@ -117,7 +121,10 @@ def render_node_time_series(node_id, series):
             frame = pd.DataFrame({
                 "Tempo": item["tempo"],
                 "Valor": item["valores"],
-                "Variavel": item["variavel"],
+                "Variável": item.get(
+                    "rotulo_variavel",
+                    item["variavel"],
+                ),
                 "Coluna original": item["coluna_original"],
             }).dropna(subset=["Tempo", "Valor"])
 
@@ -128,7 +135,7 @@ def render_node_time_series(node_id, series):
             continue
 
         plot_data = pd.concat(frames, ignore_index=True)
-        axis_label = f"Valor [{unit}]" if unit else "Valor [unidade nao informada]"
+        axis_label = f"Valor [{unit}]" if unit else "Valor [unidade não informada]"
         title = group
 
         if separate_variable:
@@ -138,7 +145,7 @@ def render_node_time_series(node_id, series):
             plot_data,
             x="Tempo",
             y="Valor",
-            color="Variavel",
+            color="Variável",
             hover_data=["Coluna original"],
             title=title,
             labels={"Valor": axis_label},

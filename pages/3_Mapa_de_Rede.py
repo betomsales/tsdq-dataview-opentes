@@ -94,8 +94,8 @@ def render_validacao_vinculo(
 
     if not expected_hash:
         st.error(
-            "Topologia sem vinculo SHA-256 com o arquivo CSV. "
-            "Solicite a equipe da co-simulacao um JSON gerado com "
+            "Topologia sem vínculo SHA-256 com o arquivo CSV. "
+            "Solicite à equipe da co-simulação um JSON gerado com "
             "metadata.results_sha256."
         )
 
@@ -103,12 +103,12 @@ def render_validacao_vinculo(
 
     if expected_hash == results_hash:
         st.success(
-            "Vinculo validado: a topologia corresponde ao CSV carregado."
+            "Vínculo validado: a topologia corresponde ao CSV carregado."
         )
         return True
 
     st.error(
-        "Vinculo invalido: o hash do CSV carregado nao corresponde ao "
+        "Vínculo inválido: o hash do CSV carregado não corresponde ao "
         "hash registrado na topologia."
     )
     st.caption(
@@ -122,7 +122,7 @@ def render_validacao_vinculo(
 
 input_mode = st.radio(
     "Fonte da rede",
-    ["Resultados da co-simulacao", "Circuito OpenDSS (.zip)"],
+    ["Resultados da co-simulação", "Circuito OpenDSS (.zip)"],
     horizontal=True,
 )
 
@@ -138,7 +138,7 @@ time_values = None
 analysis_df = None
 analysis_structure = None
 
-if input_mode == "Resultados da co-simulacao":
+if input_mode == "Resultados da co-simulação":
 
     topology_file = st.file_uploader(
         "Topologia da rede (.json)",
@@ -147,7 +147,7 @@ if input_mode == "Resultados da co-simulacao":
     )
 
     results_file = st.file_uploader(
-        "Resultados temporais da co-simulacao (.csv)",
+        "Resultados temporais da co-simulação (.csv)",
         type=["csv"],
         key="network_results_csv",
     )
@@ -185,7 +185,7 @@ if input_mode == "Resultados da co-simulacao":
                 )
 
                 selected_row = st.slider(
-                    "Instante da simulacao",
+                    "Instante da simulação",
                     min_value=0,
                     max_value=len(results_df) - 1,
                     value=0,
@@ -275,15 +275,15 @@ if graph is not None:
             )
 
             st.caption(
-                f"Nos com tensao: {measured_nodes} de {graph.total_nodes}. "
-                "Verde: adequado; amarelo: precario; vermelho: critico; "
-                "cinza: sem medicao."
+                f"Nós com tensão: {measured_nodes} de {graph.total_nodes}. "
+                "Verde: adequado; amarelo: precário; vermelho: crítico; "
+                "cinza: sem medição."
             )
 
             st.caption(
                 f"Colunas associadas: {measurement_stats['associated_columns']}; "
                 f"arestas com dados: {measurement_stats['measured_edges']}; "
-                f"nao associadas: {measurement_stats['unassociated_columns']}."
+                f"não associadas: {measurement_stats['unassociated_columns']}."
             )
 
         else:
@@ -359,8 +359,8 @@ if graph is not None:
             aba_inspetor, aba_temporal, aba_qee = st.tabs(
                 [
                     "Inspetor",
-                    "Analise Temporal",
-                    "Dados de Qualidade Energetica",
+                    "Análise Temporal",
+                    "Dados de Qualidade Energética",
                 ]
             )
 
@@ -410,14 +410,14 @@ if graph is not None:
                     else:
 
                         st.info(
-                            "O barramento selecionado nao possui serie temporal "
+                            "O barramento selecionado não possui série temporal "
                             "associada no arquivo de resultados."
                         )
 
                 else:
 
                     st.info(
-                        "A analise temporal esta disponivel para entradas "
+                        "A análise temporal está disponível para entradas "
                         "JSON + CSV validadas por hash."
                     )
 
@@ -439,7 +439,7 @@ if graph is not None:
                 else:
 
                     st.info(
-                        "Os dados de qualidade energetica estao disponiveis "
+                        "Os dados de qualidade energética estão disponíveis "
                         "para entradas JSON + CSV validadas por hash."
                     )
 
@@ -447,7 +447,7 @@ if graph is not None:
 
             st.info(
                 "Selecione um barramento no grafo ou na barra para visualizar "
-                "o inspetor e a analise eletrica correspondente."
+                "o inspetor e a análise elétrica correspondente."
             )
 
         unassociated = graph.metadata.get(
@@ -457,7 +457,7 @@ if graph is not None:
 
         if unassociated:
 
-            with st.expander("Medicoes nao associadas"):
+            with st.expander("Medições não associadas"):
                 st.json(unassociated)
 
         with st.expander(

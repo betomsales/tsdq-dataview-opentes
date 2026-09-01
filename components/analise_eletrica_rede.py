@@ -27,8 +27,16 @@ from utils.prodist import (
     obter_limites_prodist,
 )
 from utils.unidades import (
+    inferir_unidade_variavel,
     normalizar_unidade,
     remover_unidade_do_tipo,
+)
+from utils.rotulos_medicoes import (
+    montar_rotulo_serie,
+    obter_categoria_equipamento,
+    obter_nome_curto_elemento,
+    obter_rotulo_variavel,
+    obter_unidade_configurada,
 )
 
 
@@ -139,7 +147,17 @@ def _classificar_variavel(item):
         item["variable"]
     )
     variavel_lower = variavel_base.lower()
-    unidade = normalizar_unidade(unidade)
+    unidade = (
+        normalizar_unidade(unidade)
+        or obter_unidade_configurada(variavel_base)
+        or inferir_unidade_variavel(
+            variavel_base,
+            item.get("target_kind"),
+        )
+    )
+    unidade = normalizar_unidade(
+        unidade
+    )
     fase = None
 
     if variavel_lower in {"dni", "irradiance"}:
@@ -291,6 +309,9 @@ def montar_estrutura_analise_rede(
         elemento = _elemento_da_medicao(
             item
         )
+        variavel_base, _ = _separar_variavel_unidade(
+            item["variable"]
+        )
         tipo, fase, unidade = _classificar_variavel(
             item
         )
@@ -300,6 +321,10 @@ def montar_estrutura_analise_rede(
             "elemento": elemento,
             "fase": fase,
             "unidade_detectada": unidade,
+            "variavel_base": variavel_base,
+            "rotulo_variavel": obter_rotulo_variavel(
+                variavel_base
+            ),
             "coluna_original": item["column"],
             "metadados": mapeamento.get(tipo, {}),
             "tipo_entidade": _tipo_entidade(item),
@@ -307,7 +332,32 @@ def montar_estrutura_analise_rede(
             "target_kind": item["target_kind"],
             "target_id": item["target_id"],
             "target_node_id": item.get("target_node_id"),
+            "nome_curto_elemento": obter_nome_curto_elemento(
+                item.get("target_id"),
+                item.get("group"),
+            ),
+            "categoria_card": obter_categoria_equipamento(
+                variavel_base,
+                item.get("target_id"),
+            ),
         }
+        variavel_info["rotulo_serie"] = montar_rotulo_serie(
+            variavel_info,
+            incluir_origem=True,
+        )
+        variavel_info["rotulo_card"] = montar_rotulo_serie(
+            variavel_info,
+            incluir_origem=variavel_info["tipo_entidade"] in {
+                "PVSystem",
+                "Equipamento",
+                "Linha",
+            },
+            incluir_unidade=False,
+            compacto=variavel_info["tipo_entidade"] in {
+                "PVSystem",
+                "Equipamento",
+            },
+        )
 
         estrutura.setdefault(
             tipo,
@@ -476,7 +526,7 @@ def render_resumo_contexto_eletrico(
 
     with col1:
         _metric_card(
-            "Medicoes da barra",
+            "Medições da barra",
             len(
                 _variaveis_do_elemento(
                     estrutura,
@@ -498,8 +548,8 @@ def render_resumo_contexto_eletrico(
         )
 
     st.caption(
-        "Tensoes sao apresentadas na barra; correntes e fluxos P/Q sao "
-        "apresentados nos ramos; geracao/injecao aparece nos equipamentos "
+        "Tensões são apresentadas na barra; correntes e fluxos P/Q são "
+        "apresentados nos ramos; geração/injeção aparece nos equipamentos "
         "vinculados ao barramento."
     )
 
@@ -511,7 +561,7 @@ def render_controles_prodist_rede(
     key_prefix,
 ):
     mostrar_limites = st.checkbox(
-        "Mostrar faixas e limites PRODIST nos graficos",
+        "Mostrar faixas e limites PRODIST nos gráficos",
         value=True,
         key=f"{key_prefix}_mostrar_limites_prodist",
     )
@@ -547,8 +597,8 @@ def render_controles_prodist_rede(
 
     if unidade_final == "pu":
         st.caption(
-            "Valores em pu usam os limites proporcionais padrao diretamente "
-            "na serie, sem conversao de base."
+            "Valores em pu usam os limites proporcionais padrão diretamente "
+            "na série, sem conversão de base."
         )
         classe = "Média tensão (> 2,3 kV a < 69 kV)"
     else:
@@ -556,14 +606,14 @@ def render_controles_prodist_rede(
             classe = classe_inferida_por_medida
 
         st.caption(
-            f"Classe de tensao PRODIST inferida automaticamente: **{classe}**"
+            f"Classe de tensão PRODIST inferida automaticamente: **{classe}**"
         )
 
     tensao_referencia = None
 
     if classe in CLASSES_PRODIST and unidade_final != "pu":
         tensao_referencia = st.number_input(
-            f"TR para calculo dos limites [{unidade_final}]",
+            f"TR para cálculo dos limites [{unidade_final}]",
             min_value=0.0,
             value=valor_referencia,
             step=0.1 if unidade_final == "kV" else 1.0,
@@ -587,7 +637,7 @@ def render_controles_prodist_rede(
 
         with col_l1:
             limites["critico_min"] = st.number_input(
-                f"Critico inf. [{unidade_final}]",
+                f"Crítico inf. [{unidade_final}]",
                 value=float(limites["critico_min"]),
                 format="%.6f",
                 key=f"{key_prefix}_critico_min",
@@ -611,7 +661,7 @@ def render_controles_prodist_rede(
 
         with col_l4:
             limites["critico_max"] = st.number_input(
-                f"Critico sup. [{unidade_final}]",
+                f"Crítico sup. [{unidade_final}]",
                 value=float(limites["critico_max"]),
                 format="%.6f",
                 key=f"{key_prefix}_critico_max",
@@ -624,21 +674,10 @@ def _montar_opcoes_variaveis(variaveis):
     opcoes = []
 
     for variavel in variaveis:
-        fase = variavel.get("fase")
-        unidade = variavel.get("unidade_detectada")
-        nome = ""
-
-        if fase:
-            nome += fase
-
-        if unidade:
-            if nome:
-                nome += " "
-
-            nome += f"({unidade})"
-
-        if not nome:
-            nome = variavel["tipo"]
+        nome = montar_rotulo_serie(
+            variavel,
+            incluir_origem=False,
+        )
 
         opcoes.append(nome)
 
@@ -667,7 +706,7 @@ def render_analise_eletrica_elemento(
         )
 
         st.caption(
-            f"Origem da medicao: {tipo_entidade} - {origem}"
+            f"Origem da medição: {tipo_entidade} - {origem}"
         )
 
     tipos_disponiveis = [
@@ -678,8 +717,8 @@ def render_analise_eletrica_elemento(
 
     if not tipos_disponiveis:
         st.info(
-            "O barramento selecionado nao possui variaveis reconhecidas "
-            "para analise eletrica."
+            "O barramento selecionado não possui variáveis reconhecidas "
+            "para análise elétrica."
         )
         return
 
@@ -691,7 +730,7 @@ def render_analise_eletrica_elemento(
         )
 
     tipo_escolhido = st.selectbox(
-        "Tipo de variavel",
+        "Tipo de variável",
         tipos_disponiveis,
         index=indice_padrao,
         key=f"{key_prefix}_tipo_variavel",
@@ -703,7 +742,7 @@ def render_analise_eletrica_elemento(
 
     if not variaveis:
         st.warning(
-            "Nenhuma variavel encontrada para o barramento selecionado."
+            "Nenhuma variável encontrada para o barramento selecionado."
         )
         return
 
@@ -718,7 +757,7 @@ def render_analise_eletrica_elemento(
         variavel_info = variaveis[0]
     else:
         variavel_escolhida = st.selectbox(
-            "Variavel",
+            "Variável",
             opcoes_unicas,
             key=f"{key_prefix}_variavel",
         )
@@ -749,11 +788,14 @@ def render_analise_eletrica_elemento(
     tipo_variavel = remover_unidade_do_tipo(
         variavel_info["tipo"]
     )
+    rotulo_variavel = variavel_info.get(
+        "rotulo_variavel"
+    ) or tipo_variavel
 
     if unidade_final:
-        label_grafico = f"{tipo_variavel} [{unidade_final}]"
+        label_grafico = f"{rotulo_variavel} [{unidade_final}]"
     else:
-        label_grafico = tipo_variavel
+        label_grafico = rotulo_variavel
 
     coluna_real = dados_plot["coluna_real"]
     mostrar_limites_prodist = False
@@ -895,7 +937,7 @@ def render_grandezas_derivadas(
 
     if not fases:
         st.info(
-            "Nao ha pares P/Q suficientes para calcular potencia aparente "
+            "Não há pares P/Q suficientes para calcular potência aparente "
             "neste elemento."
         )
         return
@@ -919,19 +961,19 @@ def render_grandezas_derivadas(
                 "Grandeza derivada": nome_fase,
                 "P de origem": potencias_p[fase]["coluna"],
                 "Q de origem": potencias_q[fase]["coluna"],
-                "Media": valores_s.mean(),
-                "Minimo": valores_s.min(),
-                "Maximo": valores_s.max(),
+                "Média": valores_s.mean(),
+                "Mínimo": valores_s.min(),
+                "Máximo": valores_s.max(),
             }
         )
 
     st.subheader(
-        "Potencia Aparente Calculada"
+        "Potência Aparente Calculada"
     )
     st.caption(
-        "A potencia aparente S nao foi lida diretamente do arquivo CSV; "
+        "A potência aparente S não foi lida diretamente do arquivo CSV; "
         "ela foi calculada por fase a partir dos pares correspondentes "
-        "de potencia ativa P e potencia reativa Q associados ao proprio "
+        "de potência ativa P e potência reativa Q associados ao próprio "
         "elemento selecionado."
     )
 
@@ -983,7 +1025,7 @@ def render_analise_eletrica_contexto(
             )
         else:
             st.info(
-                "Esta barra nao possui medicoes proprias reconhecidas no CSV."
+                "Esta barra não possui medições próprias reconhecidas no CSV."
             )
 
     with aba_linhas:
@@ -1001,7 +1043,7 @@ def render_analise_eletrica_contexto(
 
         if not linhas:
             st.info(
-                "Nao ha linhas conectadas com medicoes reconhecidas no CSV."
+                "Não há linhas conectadas com medições reconhecidas no CSV."
             )
         else:
             linha_escolhida = st.selectbox(
@@ -1034,8 +1076,8 @@ def render_analise_eletrica_contexto(
 
         if not equipamentos:
             st.info(
-                "Nao ha equipamentos vinculados a este barramento com "
-                "medicoes reconhecidas no CSV."
+                "Não há equipamentos vinculados a este barramento com "
+                "medições reconhecidas no CSV."
             )
         else:
             equipamento_escolhido = st.selectbox(
@@ -1050,7 +1092,7 @@ def render_analise_eletrica_contexto(
             )
 
             st.caption(
-                "P/Q exibidos aqui pertencem ao equipamento, como geracao "
+                "P/Q exibidos aqui pertencem ao equipamento, como geração "
                 "fotovoltaica, inversor ou painel."
             )
 
@@ -1086,11 +1128,11 @@ def render_analise_eletrica_contexto(
 
         if not opcoes_derivadas:
             st.info(
-                "Nao ha elementos conectados com P/Q para calculos derivados."
+                "Não há elementos conectados com P/Q para cálculos derivados."
             )
         else:
             elemento_derivado = st.selectbox(
-                "Elemento para calculo",
+                "Elemento para cálculo",
                 opcoes_derivadas,
                 format_func=lambda elemento: _rotulo_elemento(
                     graph,

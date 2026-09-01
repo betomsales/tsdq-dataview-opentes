@@ -55,7 +55,7 @@ def render_controles_prodist(
     variavel_info
 ):
     """
-    Renderiza controles de limites PRODIST na unidade do grafico.
+    Renderiza controles de limites PRODIST na unidade do gráfico.
     """
 
     mostrar_limites = st.checkbox(
