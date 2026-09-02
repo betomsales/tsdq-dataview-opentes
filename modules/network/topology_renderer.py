@@ -10,22 +10,11 @@ import streamlit as st
 
 from .topology_styles import (
     get_node_style,
+    get_voltage_color,
 )
-
-
-def get_voltage_color(voltage_pu):
-    """Cor do nó segundo as faixas de tensão usadas no painel QEE."""
-
-    if voltage_pu is None:
-        return None
-
-    if 0.93 <= voltage_pu <= 1.05:
-        return "#2ECC71"
-
-    if 0.90 <= voltage_pu <= 1.08:
-        return "#F1C40F"
-
-    return "#E74C3C"
+from .d3_renderer import (
+    render_graph_d3,
+)
 
 
 def render_graph(

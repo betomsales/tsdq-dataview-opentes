@@ -42,3 +42,18 @@ def get_node_style(node):
         node.node_type,
         styles["bus"]
     )
+
+
+def get_voltage_color(voltage_pu):
+    """Cor do nó segundo as faixas de tensão usadas no painel QEE."""
+
+    if voltage_pu is None:
+        return None
+
+    if 0.93 <= voltage_pu <= 1.05:
+        return "#2ECC71"
+
+    if 0.90 <= voltage_pu <= 1.08:
+        return "#F1C40F"
+
+    return "#E74C3C"

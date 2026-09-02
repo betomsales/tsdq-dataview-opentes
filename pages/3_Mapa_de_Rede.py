@@ -13,6 +13,7 @@ from modules.network.topology_builder import (
 
 from modules.network.topology_renderer import (
     render_graph,
+    render_graph_d3,
     render_node_time_series,
 )
 from modules.network.element_inspector import (
@@ -135,6 +136,7 @@ measurement_stats = None
 results_df = None
 measurement_columns = None
 time_values = None
+selected_row = None
 analysis_df = None
 analysis_structure = None
 
@@ -304,9 +306,34 @@ if graph is not None:
                 f"Arquivo principal detectado: {master_file}"
             )
 
-        clicked_node = render_graph(
-            graph
+        highlighted_node = st.session_state.get(
+            "network_selected_node"
         )
+
+        if highlighted_node not in graph.nodes:
+            highlighted_node = None
+
+        graph_renderer = st.radio(
+            "Visualização do grafo",
+            ["D3/JavaScript", "Agraph"],
+            horizontal=True,
+            key="network_graph_renderer",
+        )
+
+        if graph_renderer == "D3/JavaScript":
+            clicked_node = render_graph_d3(
+                graph,
+                selected_node_id=highlighted_node,
+                results_df=results_df,
+                measurement_columns=measurement_columns,
+                time_values=time_values,
+                initial_frame_index=selected_row,
+            )
+
+        else:
+            clicked_node = render_graph(
+                graph
+            )
 
         st.divider()
 
