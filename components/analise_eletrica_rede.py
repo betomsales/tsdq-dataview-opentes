@@ -80,6 +80,8 @@ def _separar_variavel_unidade(variavel):
         "mvar": "MVar",
         "v": "V",
         "kv": "kV",
+        "wm2": "W/m²",
+        "kwm2": "kW/m²",
         "dni": "DNI",
     }
 

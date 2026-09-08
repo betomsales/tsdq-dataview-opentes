@@ -156,6 +156,30 @@
       text-align: right;
     }
 
+    .network-d3-card-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 12px;
+    }
+
+    .network-d3-action {
+      background: #111827;
+      border: 1px solid #111827;
+      border-radius: 6px;
+      color: #ffffff;
+      cursor: pointer;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.1;
+      padding: 8px 10px;
+    }
+
+    .network-d3-action:hover {
+      background: #1f2937;
+      border-color: #1f2937;
+    }
+
     .network-d3-legend {
       align-items: center;
       border-top: 1px solid #e5e7eb;
@@ -305,8 +329,8 @@
     let frameIndex = 0;
     let graphId = "network";
     let restoredLayout = false;
-    let lastLayoutSave = 0;
     let lastServerFrameIndex = null;
+    let isPlaying = false;
     const phases = ["A", "B", "C"];
 
     window.addEventListener("message", (event) => {
@@ -328,12 +352,13 @@
         return;
       }
 
-      stopTimeline();
       const graphData = args.graph_data || { nodes: [], edges: [], frames: [] };
       nodes = (graphData.nodes || []).map((item) => ({ ...item }));
       links = (graphData.edges || []).map((item) => ({ ...item }));
       frames = graphData.frames || [];
       graphId = graphData.graphId || "network";
+      const shouldResumeTimeline = timerId !== null || isStoredPlaybackActive();
+      stopTimeline({ persist: false });
       restoredLayout = restoreLayout(graphData.layoutState);
       const lastFrame = Math.max(frames.length - 1, 0);
       const incomingFrameIndex = clampFrameIndex(
@@ -369,6 +394,10 @@
 
       if (activeNode) {
         renderInfo(activeNode);
+      }
+
+      if (shouldResumeTimeline && frames.length > 0) {
+        startTimeline();
       }
 
       updateFrameHeight(height);
@@ -410,7 +439,7 @@
         .force("collide", d3.forceCollide().radius(29));
 
       if (restoredLayout) {
-        simulation.alpha(0.08).alphaDecay(0.12);
+        simulation.stop();
       }
 
       linkLayer
@@ -432,9 +461,15 @@
         .on("click", (_event, item) => {
           activeId = item.id;
           saveLayout();
-          Streamlit.setComponentValue(selectionPayload(item));
           renderInfo(item);
           refreshSelection();
+        })
+        .on("dblclick", (event, item) => {
+          event.stopPropagation();
+          activeId = item.id;
+          renderInfo(item);
+          refreshSelection();
+          applySelectedNode(item);
         });
 
       node
@@ -461,10 +496,9 @@
         .append("title")
         .text((item) => tooltipText(item));
 
-      simulation.on("tick", () => {
-        updateGraphPositions();
-        saveLayoutThrottled();
-      });
+      simulation
+        .on("tick", updateGraphPositions)
+        .on("end", saveLayout);
 
       updateGraphPositions();
     }
@@ -504,11 +538,7 @@
         return;
       }
 
-      playButton.textContent = "Pausa";
-      timerId = window.setInterval(() => {
-        const nextIndex = frameIndex >= frames.length - 1 ? 0 : frameIndex + 1;
-        applyFrame(nextIndex);
-      }, 650);
+      startTimeline();
     });
 
     frameSlider.addEventListener("input", () => {
@@ -516,14 +546,34 @@
       applyFrame(Number(frameSlider.value));
     });
 
-    function stopTimeline() {
-      if (!timerId) {
+    function startTimeline() {
+      if (frames.length === 0 || timerId) {
         return;
       }
 
-      window.clearInterval(timerId);
+      isPlaying = true;
+      savePlaybackState(true);
+      playButton.textContent = "Pausa";
+      timerId = window.setInterval(() => {
+        const nextIndex = frameIndex >= frames.length - 1 ? 0 : frameIndex + 1;
+        applyFrame(nextIndex);
+      }, 650);
+    }
+
+    function stopTimeline(options = {}) {
+      const persist = options.persist !== false;
+
+      if (timerId) {
+        window.clearInterval(timerId);
+      }
+
       timerId = null;
+      isPlaying = false;
       playButton.textContent = "Play";
+
+      if (persist) {
+        savePlaybackState(false);
+      }
     }
 
     function applyFrame(index) {
@@ -622,8 +672,20 @@
         id: item.id,
         frameIndex,
         graphId,
-        positions: currentPositions(),
+        playing: timerId !== null || isPlaying,
+        eventId: Date.now(),
       };
+    }
+
+    function applySelectedNode(item) {
+      if (!item) {
+        return;
+      }
+
+      saveLayout();
+      saveFrameIndex();
+      savePlaybackState(timerId !== null || isPlaying);
+      Streamlit.setComponentValue(selectionPayload(item));
     }
 
     function restoreLayout(serverLayoutState) {
@@ -672,17 +734,6 @@
       );
     }
 
-    function saveLayoutThrottled() {
-      const now = Date.now();
-
-      if (now - lastLayoutSave < 450) {
-        return;
-      }
-
-      lastLayoutSave = now;
-      saveLayout();
-    }
-
     function saveFrameIndex() {
       writeJsonStorage(
         storageKey("frame"),
@@ -690,6 +741,27 @@
           graphId,
           frameIndex,
         }
+      );
+    }
+
+    function savePlaybackState(playing) {
+      isPlaying = Boolean(playing);
+      writeJsonStorage(
+        storageKey("playback"),
+        {
+          graphId,
+          playing: isPlaying,
+        }
+      );
+    }
+
+    function isStoredPlaybackActive() {
+      const state = readJsonStorage(storageKey("playback"));
+
+      return Boolean(
+        state
+        && state.graphId === graphId
+        && state.playing === true
       );
     }
 
@@ -841,7 +913,18 @@
         <div class="network-d3-card-title">${escapeHtml(item.label)}</div>
         <div class="network-d3-card-sub">${escapeHtml(item.type)} · ${escapeHtml(item.id)}</div>
         <div class="network-d3-card-grid">${rows}</div>
+        <div class="network-d3-card-actions">
+          <button type="button" class="network-d3-action" data-apply-node>Analisar nó</button>
+        </div>
       `;
+
+      const actionButton = info.querySelector("[data-apply-node]");
+
+      if (actionButton) {
+        actionButton.addEventListener("click", () => {
+          applySelectedNode(item);
+        });
+      }
     }
 
     function escapeHtml(value) {

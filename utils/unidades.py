@@ -35,6 +35,9 @@ def normalizar_unidade(unidade):
         "wm2": "W/m²",
         "w/m2": "W/m²",
         "w/m²": "W/m²",
+        "kwm2": "kW/m²",
+        "kw/m2": "kW/m²",
+        "kw/m²": "kW/m²",
 
         "hz": "Hz",
         "%": "%"
@@ -69,9 +72,9 @@ def inferir_unidade_variavel(
         "q_ac": "var",
         "temperature": "°C",
         "temperatura": "°C",
-        "irradiance": "W/m²",
-        "irradiancia": "W/m²",
-        "irradiância": "W/m²",
+        "irradiance": "kW/m²",
+        "irradiancia": "kW/m²",
+        "irradiância": "kW/m²",
     }
 
     if variavel_normalizada in unidades_por_variavel:

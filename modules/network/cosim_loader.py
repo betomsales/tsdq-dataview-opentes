@@ -70,6 +70,8 @@ def _split_variable_unit(variable):
         "celsius": "°C",
         "wm2": "W/m²",
         "w/m2": "W/m²",
+        "kwm2": "kW/m²",
+        "kw/m2": "kW/m²",
     }
 
     parts = variable.rsplit("_", 1)

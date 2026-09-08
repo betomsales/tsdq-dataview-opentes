@@ -1,6 +1,9 @@
+from html import escape
+
 import streamlit as st
 
 from utils.escalas import auto_scale
+from utils.estado_geracao import montar_estado_geracao_fv_series
 from utils.qee import (
     calcular_desequilibrio_global,
     calcular_drp_drc_global,
@@ -87,6 +90,65 @@ def card_qee(
             font-size:{tamanho_titulo};
         ">
             {titulo}
+        </h4>
+
+        {conteudo}
+
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def card_qee_texto(
+    titulo,
+    dados=None,
+    cor="#95a5a6",
+):
+    if not dados:
+        conteudo = (
+            '<p style="color:gray;margin:0;font-size:1rem;">'
+            "Não identificado"
+            "</p>"
+        )
+    else:
+        linhas = []
+
+        for rotulo, valor in dados:
+            linhas.append(
+                "<div style='display:flex;justify-content:space-between;"
+                "gap:1rem;margin-bottom:0.3rem;align-items:flex-start;'>"
+                "<span style='font-size:1.2rem;line-height:1.35;color:#4b5563;'>"
+                f"{escape(str(rotulo))}"
+                "</span>"
+                "<span style='font-size:1.2rem;font-weight:bold;line-height:1.35;"
+                "text-align:right;white-space:normal;overflow-wrap:anywhere;'>"
+                f"{escape(str(valor))}"
+                "</span>"
+                "</div>"
+            )
+
+        conteudo = "".join(
+            linhas
+        )
+
+    st.markdown(
+        f"""
+        <div style="
+            border-left: 6px solid {cor};
+            padding: 1rem;
+            border-radius: 0.5rem;
+            background-color: #f7f7f7;
+            margin-bottom: 1rem;
+            min-height: 180px;
+        ">
+
+        <h4 style="
+            margin-top:0;
+            margin-bottom:1rem;
+            font-size:1.5rem;
+        ">
+            {escape(str(titulo))}
         </h4>
 
         {conteudo}
@@ -287,6 +349,10 @@ def render_cards_qee(
             filtro_elemento,
         ),
     )
+    estado_geracao_fv = montar_estado_geracao_fv_series(
+        df,
+        variaveis_potencia_fv,
+    )
 
     desequilibrio = calcular_desequilibrio_global(
         dados_tensao
@@ -433,6 +499,13 @@ def render_cards_qee(
     col_g1, col_g2, col_g3 = st.columns(3)
 
     with col_g1:
+        if estado_geracao_fv:
+            card_qee_texto(
+                estado_geracao_fv["titulo"],
+                estado_geracao_fv["rows"],
+                estado_geracao_fv["cor"],
+            )
+
         card_qee(
             "Potência DC dos Painéis",
             dados_potencia_dc_paineis,

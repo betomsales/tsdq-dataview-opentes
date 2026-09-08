@@ -3,6 +3,7 @@ from html import escape
 
 import streamlit as st
 
+from utils.estado_geracao import montar_estado_geracao_fv_medicoes
 from utils.rotulos_medicoes import obter_rotulo_variavel
 
 
@@ -504,9 +505,22 @@ def render_node_details(
     if _has_equipment_power_measurements(measurements):
         st.caption(
             "As potências exibidas neste barramento pertencem aos equipamentos "
-            "conectados a ele, não à barra como grandeza própria. Valores "
-            "positivos indicam injeção apenas se essa for a convenção adotada "
-            "pela co-simulação."
+            "conectados a ele, não à barra como grandeza própria. O card de "
+            "estado fotovoltaico usa apenas a potência ativa do PVSystem, do "
+            "inversor ou do painel, nessa ordem de prioridade."
+        )
+
+    estado_geracao_fv = montar_estado_geracao_fv_medicoes(
+        measurements,
+        renderizar_sem_dados=node.node_type == "pv",
+    )
+
+    if estado_geracao_fv:
+        _render_card(
+            estado_geracao_fv["titulo"],
+            estado_geracao_fv["rows"],
+            estado_geracao_fv["cor"],
+            "170px",
         )
 
     _render_measurements(
