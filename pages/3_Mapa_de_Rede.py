@@ -121,6 +121,41 @@ def render_validacao_vinculo(
 
     return False
 
+
+def normalizar_indice_instante(value, max_value):
+    if max_value is None or max_value < 0:
+        return 0
+
+    try:
+        index = int(value)
+    except (TypeError, ValueError):
+        index = 0
+
+    return min(
+        max(index, 0),
+        max_value,
+    )
+
+
+def extrair_evento_d3(evento):
+    if not isinstance(evento, dict):
+        return evento, None, None
+
+    node_id = evento.get("id") or evento.get("selectedNodeId")
+    frame_index = evento.get("frameIndex")
+    positions = evento.get("positions")
+    graph_id = evento.get("graphId")
+    layout_state = None
+
+    if graph_id and isinstance(positions, dict):
+        layout_state = {
+            "graphId": graph_id,
+            "positions": positions,
+        }
+
+    return node_id, frame_index, layout_state
+
+
 input_mode = st.radio(
     "Fonte da rede",
     ["Resultados da co-simulação", "Circuito OpenDSS (.zip)"],
@@ -186,12 +221,44 @@ if input_mode == "Resultados da co-simulação":
                     results_file
                 )
 
+                max_row_index = len(results_df) - 1
+                stored_row = normalizar_indice_instante(
+                    st.session_state.get("network_selected_row", 0),
+                    max_row_index,
+                )
+                slider_key = "network_selected_row_slider"
+                sincronizar_slider = st.session_state.pop(
+                    "network_sync_selected_row_slider",
+                    False,
+                )
+                slider_value = st.session_state.get(
+                    slider_key
+                )
+
+                try:
+                    slider_value = int(slider_value)
+                except (TypeError, ValueError):
+                    slider_value = None
+
+                if (
+                    sincronizar_slider
+                    or slider_value is None
+                    or slider_value < 0
+                    or slider_value > max_row_index
+                ):
+                    st.session_state[slider_key] = stored_row
+
                 selected_row = st.slider(
                     "Instante da simulação",
                     min_value=0,
-                    max_value=len(results_df) - 1,
-                    value=0,
+                    max_value=max_row_index,
+                    key=slider_key,
                 )
+                selected_row = normalizar_indice_instante(
+                    selected_row,
+                    max_row_index,
+                )
+                st.session_state["network_selected_row"] = selected_row
 
                 selected_time = time_values.iloc[selected_row]
 
@@ -328,6 +395,9 @@ if graph is not None:
                 measurement_columns=measurement_columns,
                 time_values=time_values,
                 initial_frame_index=selected_row,
+                layout_state=st.session_state.get(
+                    "network_d3_layout_state"
+                ),
             )
 
         else:
@@ -337,11 +407,34 @@ if graph is not None:
 
         st.divider()
 
-        if isinstance(clicked_node, dict):
-            clicked_node = clicked_node.get("id")
+        (
+            clicked_node,
+            clicked_frame_index,
+            layout_state,
+        ) = extrair_evento_d3(
+            clicked_node
+        )
+        should_rerun = False
+
+        if layout_state:
+            st.session_state["network_d3_layout_state"] = layout_state
+
+        if clicked_frame_index is not None and results_df is not None:
+            frame_index = normalizar_indice_instante(
+                clicked_frame_index,
+                len(results_df) - 1,
+            )
+
+            if frame_index != st.session_state.get("network_selected_row"):
+                st.session_state["network_selected_row"] = frame_index
+                st.session_state["network_sync_selected_row_slider"] = True
+                should_rerun = True
 
         if clicked_node in graph.nodes:
             st.session_state["network_selected_node"] = clicked_node
+
+        if should_rerun:
+            st.rerun()
 
         node_options = sorted(
             graph.nodes.keys()

@@ -303,6 +303,10 @@
     let links = [];
     let frames = [];
     let frameIndex = 0;
+    let graphId = "network";
+    let restoredLayout = false;
+    let lastLayoutSave = 0;
+    let lastServerFrameIndex = null;
     const phases = ["A", "B", "C"];
 
     window.addEventListener("message", (event) => {
@@ -329,8 +333,21 @@
       nodes = (graphData.nodes || []).map((item) => ({ ...item }));
       links = (graphData.edges || []).map((item) => ({ ...item }));
       frames = graphData.frames || [];
+      graphId = graphData.graphId || "network";
+      restoredLayout = restoreLayout(graphData.layoutState);
       const lastFrame = Math.max(frames.length - 1, 0);
-      frameIndex = Math.min(Math.max(Number(graphData.initialFrame) || 0, 0), lastFrame);
+      const incomingFrameIndex = clampFrameIndex(
+        graphData.initialFrame,
+        lastFrame
+      );
+      const keepLocalFrame = (
+        lastServerFrameIndex !== null
+        && incomingFrameIndex === lastServerFrameIndex
+      );
+      frameIndex = keepLocalFrame
+        ? clampFrameIndex(frameIndex, lastFrame)
+        : incomingFrameIndex;
+      lastServerFrameIndex = incomingFrameIndex;
       activeId = args.selected_node_id || null;
       const height = Number(args.height) || 640;
 
@@ -392,6 +409,10 @@
         .force("center", d3.forceCenter(width / 2, height / 2))
         .force("collide", d3.forceCollide().radius(29));
 
+      if (restoredLayout) {
+        simulation.alpha(0.08).alphaDecay(0.12);
+      }
+
       linkLayer
         .selectAll("line")
         .data(links)
@@ -410,7 +431,8 @@
         .call(drag(simulation))
         .on("click", (_event, item) => {
           activeId = item.id;
-          Streamlit.setComponentValue(item.id);
+          saveLayout();
+          Streamlit.setComponentValue(selectionPayload(item));
           renderInfo(item);
           refreshSelection();
         });
@@ -440,17 +462,11 @@
         .text((item) => tooltipText(item));
 
       simulation.on("tick", () => {
-        d3.select(svgElement)
-          .selectAll(".network-link")
-          .attr("x1", (item) => item.source.x)
-          .attr("y1", (item) => item.source.y)
-          .attr("x2", (item) => item.target.x)
-          .attr("y2", (item) => item.target.y);
-
-        d3.select(svgElement)
-          .selectAll(".network-node")
-          .attr("transform", (item) => `translate(${item.x},${item.y})`);
+        updateGraphPositions();
+        saveLayoutThrottled();
       });
+
+      updateGraphPositions();
     }
 
     root
@@ -538,6 +554,7 @@
 
       frameSlider.value = String(frameIndex);
       timeLabel.textContent = frame.label;
+      saveFrameIndex();
       refreshColors();
       d3.select(svgElement).selectAll(".network-node title").text((item) => tooltipText(item));
 
@@ -546,6 +563,147 @@
       if (activeNode) {
         renderInfo(activeNode);
       }
+    }
+
+    function clampFrameIndex(index, lastFrame) {
+      const numericIndex = Number(index);
+
+      if (!Number.isFinite(numericIndex)) {
+        return 0;
+      }
+
+      return Math.min(
+        Math.max(Math.trunc(numericIndex), 0),
+        lastFrame
+      );
+    }
+
+    function storageKey(kind) {
+      return `network-d3-${kind}:${graphId}`;
+    }
+
+    function readJsonStorage(key) {
+      try {
+        return JSON.parse(window.localStorage.getItem(key));
+      } catch (_error) {
+        return null;
+      }
+    }
+
+    function writeJsonStorage(key, value) {
+      try {
+        window.localStorage.setItem(key, JSON.stringify(value));
+      } catch (_error) {
+        return;
+      }
+    }
+
+    function currentPositions() {
+      const positions = {};
+
+      nodes.forEach((item) => {
+        if (!Number.isFinite(item.x) || !Number.isFinite(item.y)) {
+          return;
+        }
+
+        positions[item.id] = {
+          x: item.x,
+          y: item.y,
+          vx: Number.isFinite(item.vx) ? item.vx : 0,
+          vy: Number.isFinite(item.vy) ? item.vy : 0,
+        };
+      });
+
+      return positions;
+    }
+
+    function selectionPayload(item) {
+      return {
+        id: item.id,
+        frameIndex,
+        graphId,
+        positions: currentPositions(),
+      };
+    }
+
+    function restoreLayout(serverLayoutState) {
+      const localLayoutState = readJsonStorage(storageKey("layout"));
+      const layoutState = (
+        serverLayoutState && serverLayoutState.graphId === graphId
+      ) ? serverLayoutState : localLayoutState;
+
+      if (!layoutState || layoutState.graphId !== graphId || !layoutState.positions) {
+        return false;
+      }
+
+      let restoredAnyNode = false;
+
+      nodes.forEach((item) => {
+        const position = layoutState.positions[item.id];
+
+        if (!position) {
+          return;
+        }
+
+        const x = Number(position.x);
+        const y = Number(position.y);
+
+        if (!Number.isFinite(x) || !Number.isFinite(y)) {
+          return;
+        }
+
+        item.x = x;
+        item.y = y;
+        item.vx = Number.isFinite(Number(position.vx)) ? Number(position.vx) : 0;
+        item.vy = Number.isFinite(Number(position.vy)) ? Number(position.vy) : 0;
+        restoredAnyNode = true;
+      });
+
+      return restoredAnyNode;
+    }
+
+    function saveLayout() {
+      writeJsonStorage(
+        storageKey("layout"),
+        {
+          graphId,
+          positions: currentPositions(),
+        }
+      );
+    }
+
+    function saveLayoutThrottled() {
+      const now = Date.now();
+
+      if (now - lastLayoutSave < 450) {
+        return;
+      }
+
+      lastLayoutSave = now;
+      saveLayout();
+    }
+
+    function saveFrameIndex() {
+      writeJsonStorage(
+        storageKey("frame"),
+        {
+          graphId,
+          frameIndex,
+        }
+      );
+    }
+
+    function updateGraphPositions() {
+      d3.select(svgElement)
+        .selectAll(".network-link")
+        .attr("x1", (item) => item.source.x)
+        .attr("y1", (item) => item.source.y)
+        .attr("x2", (item) => item.target.x)
+        .attr("y2", (item) => item.target.y);
+
+      d3.select(svgElement)
+        .selectAll(".network-node")
+        .attr("transform", (item) => `translate(${item.x},${item.y})`);
     }
 
     function numericValues(item) {
@@ -717,6 +875,7 @@
 
         event.subject.fx = null;
         event.subject.fy = null;
+        saveLayout();
       }
 
       return d3.drag()

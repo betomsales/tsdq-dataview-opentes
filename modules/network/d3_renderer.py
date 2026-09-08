@@ -1,4 +1,5 @@
 from pathlib import Path
+import hashlib
 import re
 
 import pandas as pd
@@ -20,6 +21,27 @@ VOLTAGE_VARIABLE_PATTERN = re.compile(
     r"^V([123ABC])_pu$",
     re.IGNORECASE,
 )
+
+
+def _graph_signature(graph):
+    parts = []
+
+    for node_id in sorted(graph.nodes):
+        node = graph.nodes[node_id]
+        parts.append(
+            f"node:{node.id}:{node.node_type}"
+        )
+
+    for edge in sorted(graph.edges.values(), key=lambda item: item.id):
+        parts.append(
+            f"edge:{edge.id}:{edge.source}:{edge.target}:{edge.edge_type}"
+        )
+
+    raw = "\n".join(parts).encode("utf-8")
+
+    return hashlib.sha256(
+        raw
+    ).hexdigest()[:16]
 
 
 def _as_number(value):
@@ -266,6 +288,7 @@ def render_graph_d3(
     measurement_columns=None,
     time_values=None,
     initial_frame_index=0,
+    layout_state=None,
     key="network_d3_graph",
 ):
     """Renderiza o mapa de rede em D3 e retorna o nó clicado."""
@@ -273,6 +296,13 @@ def render_graph_d3(
     payload = _graph_to_d3_payload(
         graph
     )
+    payload["graphId"] = _graph_signature(
+        graph
+    )
+
+    if isinstance(layout_state, dict):
+        payload["layoutState"] = layout_state
+
     temporal_frames = build_d3_temporal_frames(
         graph,
         results_df,
