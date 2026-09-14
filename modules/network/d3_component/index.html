@@ -125,6 +125,7 @@
       color: #111827;
       min-width: 210px;
       padding: 12px;
+      width: min(360px, calc(100% - 24px));
       position: absolute;
       right: 12px;
     }
@@ -156,6 +157,85 @@
       text-align: right;
     }
 
+    .network-d3-osc {
+      border-top: 1px solid #e5e7eb;
+      margin-top: 10px;
+      padding-top: 10px;
+    }
+
+    .network-d3-osc-head {
+      align-items: baseline;
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+
+    .network-d3-osc-head span {
+      color: #111827;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .network-d3-osc-head small {
+      color: #64748b;
+      font-size: 11px;
+    }
+
+    .network-d3-osc-svg {
+      display: block;
+      height: 112px;
+      width: 100%;
+    }
+
+    .network-d3-osc-axis,
+    .network-d3-osc-grid {
+      stroke: #e5e7eb;
+      stroke-width: 1;
+    }
+
+    .network-d3-osc-line {
+      fill: none;
+      stroke-width: 2;
+    }
+
+    .network-d3-osc-cursor {
+      stroke: #111827;
+      stroke-dasharray: 4 4;
+      stroke-width: 1.5;
+    }
+
+    .network-d3-osc-point {
+      stroke: #ffffff;
+      stroke-width: 1.3;
+    }
+
+    .network-d3-osc-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .network-d3-osc-legend span {
+      align-items: center;
+      color: #475569;
+      display: inline-flex;
+      font-size: 11px;
+      gap: 4px;
+    }
+
+    .network-d3-osc-legend i {
+      border-radius: 999px;
+      display: inline-block;
+      height: 8px;
+      width: 8px;
+    }
+
+    .network-d3-osc-empty {
+      color: #64748b;
+      font-size: 12px;
+      line-height: 1.35;
+    }
     .network-d3-card-actions {
       display: flex;
       justify-content: flex-end;
@@ -913,10 +993,13 @@
         <div class="network-d3-card-title">${escapeHtml(item.label)}</div>
         <div class="network-d3-card-sub">${escapeHtml(item.type)} · ${escapeHtml(item.id)}</div>
         <div class="network-d3-card-grid">${rows}</div>
+        <div class="network-d3-osc" data-osc></div>
         <div class="network-d3-card-actions">
           <button type="button" class="network-d3-action" data-apply-node>Analisar nó</button>
         </div>
       `;
+
+      renderOscillography(item);
 
       const actionButton = info.querySelector("[data-apply-node]");
 
@@ -927,6 +1010,164 @@
       }
     }
 
+    function frameNode(frame, nodeId) {
+      if (!frame || !Array.isArray(frame.nodes)) {
+        return null;
+      }
+
+      return frame.nodes.find((node) => node.id === nodeId) || null;
+    }
+
+    function renderOscillography(item) {
+      const container = info.querySelector("[data-osc]");
+
+      if (!container) {
+        return;
+      }
+
+      container.innerHTML = `
+        <div class="network-d3-osc-head">
+          <span>Oscilografia</span>
+          <small>Tensão por fase</small>
+        </div>
+      `;
+
+      if (frames.length === 0) {
+        container.insertAdjacentHTML(
+          "beforeend",
+          `<div class="network-d3-osc-empty">Sem série temporal para este grafo.</div>`
+        );
+        return;
+      }
+
+      const series = phases
+        .map((phase) => {
+          const points = frames.map((frame, index) => {
+            const node = frameNode(frame, item.id);
+            const value = node && node.phases ? node.phases[phase] : null;
+
+            return {
+              index,
+              value: Number.isFinite(value) ? value : null,
+            };
+          });
+
+          return {
+            phase,
+            points,
+            color: phase === "A" ? "#2563eb" : phase === "B" ? "#f97316" : "#16a34a",
+          };
+        })
+        .filter((serie) => serie.points.some((point) => Number.isFinite(point.value)));
+
+      const allValues = series.flatMap((serie) => (
+        serie.points
+          .map((point) => point.value)
+          .filter((value) => Number.isFinite(value))
+      ));
+
+      if (allValues.length === 0) {
+        container.insertAdjacentHTML(
+          "beforeend",
+          `<div class="network-d3-osc-empty">Este nó não possui tensões temporais reconhecidas.</div>`
+        );
+        return;
+      }
+
+      let [minY, maxY] = d3.extent(allValues);
+      const delta = maxY - minY;
+      const padding = Math.max(delta * 0.1, 0.005);
+
+      minY -= padding;
+      maxY += padding;
+
+      const width = Math.max(container.clientWidth || 300, 260);
+      const height = 112;
+      const margin = { top: 8, right: 10, bottom: 18, left: 34 };
+      const x = d3.scaleLinear()
+        .domain([0, Math.max(frames.length - 1, 1)])
+        .range([margin.left, width - margin.right]);
+      const y = d3.scaleLinear()
+        .domain([minY, maxY])
+        .nice()
+        .range([height - margin.bottom, margin.top]);
+      const svg = d3.select(container)
+        .append("svg")
+        .attr("class", "network-d3-osc-svg")
+        .attr("viewBox", [0, 0, width, height])
+        .attr("role", "img");
+
+      y.ticks(3).forEach((tick) => {
+        svg.append("line")
+          .attr("class", "network-d3-osc-grid")
+          .attr("x1", margin.left)
+          .attr("x2", width - margin.right)
+          .attr("y1", y(tick))
+          .attr("y2", y(tick));
+
+        svg.append("text")
+          .attr("x", margin.left - 6)
+          .attr("y", y(tick) + 3)
+          .attr("text-anchor", "end")
+          .attr("fill", "#64748b")
+          .attr("font-size", 10)
+          .text(tick.toFixed(3));
+      });
+
+      svg.append("line")
+        .attr("class", "network-d3-osc-axis")
+        .attr("x1", margin.left)
+        .attr("x2", width - margin.right)
+        .attr("y1", height - margin.bottom)
+        .attr("y2", height - margin.bottom);
+
+      const line = d3.line()
+        .defined((point) => Number.isFinite(point.value))
+        .x((point) => x(point.index))
+        .y((point) => y(point.value));
+
+      series.forEach((serie) => {
+        svg.append("path")
+          .datum(serie.points)
+          .attr("class", "network-d3-osc-line")
+          .attr("stroke", serie.color)
+          .attr("d", line);
+      });
+
+      const currentIndex = clampFrameIndex(frameIndex, frames.length - 1);
+      const cursorX = x(currentIndex);
+
+      svg.append("line")
+        .attr("class", "network-d3-osc-cursor")
+        .attr("x1", cursorX)
+        .attr("x2", cursorX)
+        .attr("y1", margin.top)
+        .attr("y2", height - margin.bottom);
+
+      series.forEach((serie) => {
+        const point = serie.points[currentIndex];
+
+        if (!point || !Number.isFinite(point.value)) {
+          return;
+        }
+
+        svg.append("circle")
+          .attr("class", "network-d3-osc-point")
+          .attr("cx", cursorX)
+          .attr("cy", y(point.value))
+          .attr("r", 4)
+          .attr("fill", serie.color);
+      });
+
+      const legend = d3.select(container)
+        .append("div")
+        .attr("class", "network-d3-osc-legend");
+
+      series.forEach((serie) => {
+        legend.append("span")
+          .html(`<i style="background:${serie.color}"></i>Fase ${serie.phase}`);
+      });
+    }
     function escapeHtml(value) {
       return String(value)
         .replaceAll("&", "&amp;")

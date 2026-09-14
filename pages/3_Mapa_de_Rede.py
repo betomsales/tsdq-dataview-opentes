@@ -28,6 +28,9 @@ from components.analise_eletrica_rede import (
 from components.cards_qee import (
     render_cards_qee,
 )
+from components.oscilografia import (
+    render_oscilografia_no,
+)
 from modules.network.error_handler import (
     friendly_dss_error,
 )
@@ -498,6 +501,15 @@ if graph is not None:
                     and analysis_structure is not None
                 ):
 
+                    render_oscilografia_no(
+                        analysis_df,
+                        analysis_structure,
+                        selected_node,
+                        frame_index=selected_row,
+                        key_prefix=f"oscilografia_rede_{selected_node}",
+                    )
+
+                    st.divider()
                     render_analise_eletrica_contexto(
                         analysis_df,
                         analysis_structure,
