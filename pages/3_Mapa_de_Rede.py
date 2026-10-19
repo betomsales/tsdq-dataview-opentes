@@ -80,13 +80,37 @@ def obter_hash_vinculado(topology_data):
         {},
     ) or {}
 
-    hash_value = metadata.get(
-        "results_sha256",
-        "",
-    )
+    hash_data = topology_data.get(
+        "hash",
+        {},
+    ) or {}
+    metadata_hash_data = metadata.get(
+        "hash",
+        {},
+    ) or {}
 
-    return str(hash_value).strip().upper()
+    candidatos = [
+        metadata.get("results_sha256"),
+        metadata.get("csv_sha256"),
+        metadata.get("sha256"),
+        metadata_hash_data.get("results_sha256")
+        if isinstance(metadata_hash_data, dict)
+        else None,
+        topology_data.get("results_sha256"),
+        topology_data.get("csv_sha256"),
+        topology_data.get("sha256"),
+        hash_data.get("results_sha256")
+        if isinstance(hash_data, dict)
+        else None,
+    ]
 
+    for hash_value in candidatos:
+        hash_text = str(hash_value or "").strip().upper()
+
+        if hash_text:
+            return hash_text
+
+    return ""
 
 def render_validacao_vinculo(
     topology_data,
@@ -100,7 +124,7 @@ def render_validacao_vinculo(
         st.error(
             "Topologia sem vínculo SHA-256 com o arquivo CSV. "
             "Solicite à equipe da co-simulação um JSON gerado com "
-            "metadata.results_sha256."
+            "metadata.results_sha256 ou campo SHA-256 equivalente."
         )
 
         return False

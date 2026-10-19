@@ -129,8 +129,63 @@ def _measurement(
     }
 
 
+def _normalizar_id(value):
+    return str(value).strip().lower()
+
+
+def _metadata_item(item):
+    metadata = item.get("metadata")
+
+    if isinstance(metadata, dict):
+        return metadata.copy()
+
+    return {}
+
+
+def _primeiro_valor(item, nomes):
+    for nome in nomes:
+        if nome in item and item[nome] is not None:
+            return item[nome]
+
+    return None
+
+
+def _valor_numerico(value):
+    try:
+        if value is None or pd.isna(value):
+            return None
+
+        return float(value)
+
+    except (TypeError, ValueError):
+        return None
+
+
+def _metadata_global_topologia(data):
+    metadata = data.get("metadata")
+
+    if not isinstance(metadata, dict):
+        metadata = {}
+    else:
+        metadata = metadata.copy()
+
+    if "elements" in data:
+        metadata["elements"] = data.get("elements") or []
+
+    metadata["topology_schema_keys"] = sorted(
+        str(key)
+        for key in data.keys()
+    )
+
+    return metadata
+
+
 def load_topology_json(uploaded_file):
-    """Converte o JSON exportado pela co-simulação em NetworkGraph."""
+    """Converte o JSON de topologia da co-simulacao em NetworkGraph.
+
+    O loader aceita o formato legado nodes/edges e o formato mais novo com
+    metadados topologicos por no, como coordenadas x/y e lista elements.
+    """
 
     uploaded_file.seek(0)
     raw = uploaded_file.read()
@@ -140,46 +195,129 @@ def load_topology_json(uploaded_file):
 
     data = json.loads(raw)
 
-    if not isinstance(data.get("nodes"), list) or not isinstance(
-        data.get("edges"), list
-    ):
-        raise ValueError("O JSON deve conter as listas 'nodes' e 'edges'.")
+    if not isinstance(data, dict):
+        raise ValueError("O JSON de topologia deve ter um objeto na raiz.")
+
+    nodes = data.get("nodes")
+    edges = data.get("edges") or data.get("links") or data.get("branches")
+
+    if not isinstance(nodes, list) or not isinstance(edges, list):
+        raise ValueError(
+            "O JSON deve conter as listas 'nodes' e 'edges' "
+            "ou campos equivalentes 'links'/'branches'."
+        )
 
     graph = NetworkGraph()
+    graph.metadata = _metadata_global_topologia(
+        data
+    )
 
-    for item in data["nodes"]:
-        node_id = str(item["id"]).lower()
+    for item in nodes:
+        if not isinstance(item, dict):
+            continue
+
+        raw_id = _primeiro_valor(
+            item,
+            ["id", "name", "bus", "label"],
+        )
+
+        if raw_id is None:
+            raise ValueError("Um no da topologia nao possui identificador.")
+
+        node_id = _normalizar_id(
+            raw_id
+        )
+        metadata = _metadata_item(
+            item
+        )
+        metadata.setdefault(
+            "topology_id_original",
+            str(raw_id),
+        )
+
+        voltage_pu = _primeiro_valor(
+            item,
+            ["voltage_pu", "voltage", "v_pu"],
+        )
+        voltage_pu = _valor_numerico(
+            voltage_pu
+        )
+
         graph.add_node(
             NetworkNode(
                 id=node_id,
-                label=str(item.get("label", item["id"])),
-                node_type=item.get("node_type", "bus"),
-                voltage_pu=item.get("voltage_pu"),
-                metadata=item.get("metadata") or {},
+                label=str(item.get("label", raw_id)),
+                node_type=str(
+                    item.get("node_type")
+                    or item.get("type")
+                    or metadata.get("node_type")
+                    or "bus"
+                ),
+                voltage_pu=voltage_pu,
+                metadata=metadata,
             )
         )
 
-    for item in data["edges"]:
-        source = str(item["source"]).lower()
-        target = str(item["target"]).lower()
+    for item in edges:
+        if not isinstance(item, dict):
+            continue
+
+        source_raw = _primeiro_valor(
+            item,
+            ["source", "from", "from_bus", "bus1"],
+        )
+        target_raw = _primeiro_valor(
+            item,
+            ["target", "to", "to_bus", "bus2"],
+        )
+
+        if source_raw is None or target_raw is None:
+            raise ValueError("Uma conexao da topologia nao possui origem/destino.")
+
+        source = _normalizar_id(
+            source_raw
+        )
+        target = _normalizar_id(
+            target_raw
+        )
+
+        edge_id = _primeiro_valor(
+            item,
+            ["id", "name"],
+        )
+
+        if edge_id is None:
+            edge_id = f"{source}_{target}"
 
         if source not in graph.nodes or target not in graph.nodes:
             raise ValueError(
-                f"A conexão '{item.get('id', '')}' referencia um nó inexistente."
+                f"A conexao '{edge_id}' referencia um no inexistente."
             )
+
+        metadata = _metadata_item(
+            item
+        )
+        metadata.setdefault(
+            "topology_id_original",
+            str(edge_id),
+        )
 
         graph.add_edge(
             NetworkEdge(
-                id=str(item["id"]),
+                id=str(edge_id),
                 source=source,
                 target=target,
-                edge_type=item.get("edge_type", "line"),
-                metadata=item.get("metadata") or {},
+                edge_type=str(
+                    item.get("edge_type")
+                    or item.get("type")
+                    or metadata.get("edge_type")
+                    or "line"
+                ),
+                metadata=metadata,
             )
         )
 
     return graph
-
 
 def load_cosim_results(uploaded_file):
     """Lê o CSV e cataloga todas as séries por elemento da co-simulação."""

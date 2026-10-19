@@ -87,6 +87,17 @@ def _graph_to_d3_payload(graph):
         voltage_pu = _as_number(
             node.voltage_pu
         )
+        coord_x = _as_number(
+            node.metadata.get("x")
+        )
+        coord_y = _as_number(
+            node.metadata.get("y")
+        )
+        coord_defined = bool(
+            node.metadata.get("coord_defined")
+            and coord_x is not None
+            and coord_y is not None
+        )
 
         nodes.append({
             "id": node.id,
@@ -104,6 +115,11 @@ def _graph_to_d3_payload(graph):
                     [],
                 )
             ),
+            "coord": {
+                "x": coord_x,
+                "y": coord_y,
+                "defined": coord_defined,
+            },
             "phases": {
                 "A": _get_phase_value(
                     phases,
