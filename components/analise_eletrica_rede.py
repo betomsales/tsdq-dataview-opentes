@@ -3,6 +3,7 @@ import re
 import pandas as pd
 import streamlit as st
 
+from modules.network.pv_binding import vincular_medicoes_pv
 from components.graficos import (
     eh_tensao,
     render_grafico_distribuicao_tensao,
@@ -241,11 +242,7 @@ def _pertence_ao_no(
     item,
     node_id,
 ):
-    pv_nodes = [
-        node.id
-        for node in graph.nodes.values()
-        if node.node_type == "pv"
-    ]
+    item = vincular_medicoes_pv(graph, [item])[0]
 
     if (
         item["target_kind"] == "node"
@@ -261,11 +258,7 @@ def _pertence_ao_no(
     ):
         return True
 
-    return (
-        item["target_kind"] in {"pv", "pv_equipment"}
-        and len(pv_nodes) == 1
-        and pv_nodes[0] == node_id
-    )
+    return False
 
 
 def _elemento_da_medicao(item):
@@ -307,7 +300,7 @@ def montar_estrutura_analise_rede(
     estrutura = {}
     mapeamento = carregar_mapeamento()
 
-    for item in measurement_columns:
+    for item in vincular_medicoes_pv(graph, measurement_columns):
         elemento = _elemento_da_medicao(
             item
         )
@@ -325,7 +318,7 @@ def montar_estrutura_analise_rede(
             "unidade_detectada": unidade,
             "variavel_base": variavel_base,
             "rotulo_variavel": obter_rotulo_variavel(
-                variavel_base
+                variavel_base, unidade,
             ),
             "coluna_original": item["column"],
             "metadados": mapeamento.get(tipo, {}),
@@ -341,6 +334,7 @@ def montar_estrutura_analise_rede(
             "categoria_card": obter_categoria_equipamento(
                 variavel_base,
                 item.get("target_id"),
+                unidade,
             ),
         }
         if item["target_kind"] == "node":
@@ -422,12 +416,6 @@ def _equipamentos_vinculados(
     estrutura,
     node_id,
 ):
-    pv_nodes = [
-        node.id
-        for node in graph.nodes.values()
-        if node.node_type == "pv"
-    ]
-
     equipamentos = []
 
     for elementos in estrutura.values():
@@ -450,16 +438,6 @@ def _equipamentos_vinculados(
                     elemento
                 )
                 continue
-
-            if (
-                tipo_entidade in {"PVSystem", "Equipamento"}
-                and not target_node_id
-                and len(pv_nodes) == 1
-                and pv_nodes[0] == node_id
-            ):
-                equipamentos.append(
-                    elemento
-                )
 
     return sorted(
         set(equipamentos)

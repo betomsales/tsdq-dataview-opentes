@@ -156,6 +156,7 @@ def _measurement_category(measurement):
             "Potência Ativa AC dos Inversores": ("#d35400", 45),
             "Potência Reativa AC dos Inversores": ("#16a085", 50),
             "Potência Ativa do PVSystem": ("#f39c12", 55),
+            "Potência Ativa Normalizada": ("#2980b9", 57),
             "Potência Reativa do PVSystem": ("#1abc9c", 60),
             "Temperatura dos Painéis": ("#c0392b", 70),
             "Irradiância dos Painéis": ("#27ae60", 80),
@@ -319,6 +320,9 @@ def _render_measurements(
     measurement_cards = {}
 
     for measurement in measurements:
+        if measurement.get("categoria_card") == "Potência Ativa Normalizada":
+            continue
+
         title, color, order = _measurement_category(
             measurement
         )

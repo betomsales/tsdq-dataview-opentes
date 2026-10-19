@@ -44,7 +44,9 @@ def obter_config_variavel(variavel):
     return {}
 
 
-def obter_rotulo_variavel(variavel):
+def obter_rotulo_variavel(variavel, unidade=None):
+    if str(variavel).lower() == "p" and str(unidade).lower() == "pu":
+        variavel = "P_pu"
     config = obter_config_variavel(
         variavel
     )
@@ -115,6 +117,7 @@ def obter_nome_curto_elemento(
 def obter_categoria_equipamento(
     variavel,
     target_id=None,
+    unidade=None,
 ):
     variavel_normalizada = str(
         variavel or ""
@@ -122,6 +125,11 @@ def obter_categoria_equipamento(
     target_normalizado = str(
         target_id or ""
     ).strip().lower()
+
+    if variavel_normalizada == "p_pu" or (
+        variavel_normalizada == "p" and str(unidade).lower() == "pu"
+    ):
+        return "Potência Ativa Normalizada"
 
     if variavel_normalizada == "p_dc":
         return "Potência DC dos Painéis"

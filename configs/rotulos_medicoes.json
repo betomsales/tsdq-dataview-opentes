@@ -4,6 +4,10 @@
       "rotulo": "Potência ativa medida",
       "unidade": "W"
     },
+    "P_pu": {
+      "rotulo": "Potência ativa normalizada",
+      "unidade": "pu"
+    },
     "Q_meas": {
       "rotulo": "Potência reativa medida",
       "unidade": "var"

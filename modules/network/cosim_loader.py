@@ -13,6 +13,7 @@ from utils.rotulos_medicoes import (
 from utils.unidades import inferir_unidade_variavel, normalizar_unidade
 
 from .graph_model import NetworkEdge, NetworkGraph, NetworkNode
+from .pv_binding import vincular_medicoes_pv
 
 
 VOLTAGE_COLUMN_PATTERN = re.compile(
@@ -112,7 +113,7 @@ def _measurement(
         "variavel": variable_name,
         "unidade": unit,
         "rotulo_variavel": obter_rotulo_variavel(
-            variable_name
+            variable_name, unit,
         ),
         "nome_curto_elemento": obter_nome_curto_elemento(
             target_id,
@@ -121,6 +122,7 @@ def _measurement(
         "categoria_card": obter_categoria_equipamento(
             variable_name,
             target_id,
+            unit,
         ),
         "valor": float(value),
         "coluna_original": column,
@@ -450,11 +452,6 @@ def apply_measurement_snapshot(graph, df, measurement_columns, row_index):
     associated_columns = set()
     unassociated = []
 
-    pv_nodes = [
-        node for node in graph.nodes.values()
-        if node.node_type == "pv"
-    ]
-
     for node in graph.nodes.values():
         node.voltage_pu = None
         node.metadata.pop("voltage_phases_pu", None)
@@ -464,7 +461,7 @@ def apply_measurement_snapshot(graph, df, measurement_columns, row_index):
     for edge in graph.edges.values():
         edge.metadata["measurements"] = []
 
-    for item in measurement_columns:
+    for item in vincular_medicoes_pv(graph, measurement_columns):
         value = pd.to_numeric(row[item["column"]], errors="coerce")
 
         if pd.isna(value):
@@ -483,14 +480,12 @@ def apply_measurement_snapshot(graph, df, measurement_columns, row_index):
 
             if target_node_id:
                 target = graph.nodes.get(target_node_id)
-            elif len(pv_nodes) == 1:
-                target = pv_nodes[0]
 
         if target is None:
             unassociated.append({
                 "coluna_original": item["column"],
                 "valor": float(value),
-                "motivo": "Elemento correspondente não encontrado na topologia",
+                "motivo": item.get("binding_error") or "Elemento correspondente não encontrado na topologia",
             })
             continue
 
@@ -554,12 +549,7 @@ def get_monitored_node_ids(graph, measurement_columns):
     """Retorna somente nós que possuem ao menos uma coluna real no CSV."""
 
     monitored = set()
-    pv_nodes = [
-        node.id for node in graph.nodes.values()
-        if node.node_type == "pv"
-    ]
-
-    for item in measurement_columns:
+    for item in vincular_medicoes_pv(graph, measurement_columns):
         if item["target_kind"] == "node" and item["target_id"] in graph.nodes:
             monitored.add(item["target_id"])
         elif item["target_kind"] in {"pv", "pv_equipment"}:
@@ -567,8 +557,6 @@ def get_monitored_node_ids(graph, measurement_columns):
 
             if target_node_id and target_node_id in graph.nodes:
                 monitored.add(target_node_id)
-            elif len(pv_nodes) == 1:
-                monitored.add(pv_nodes[0])
 
     return sorted(monitored)
 
@@ -582,22 +570,13 @@ def prepare_node_time_series(
 ):
     """Prepara curvas diretamente das colunas do CSV, sem criar valores."""
 
-    pv_nodes = [
-        node.id for node in graph.nodes.values()
-        if node.node_type == "pv"
-    ]
     series = []
 
-    for item in measurement_columns:
+    for item in vincular_medicoes_pv(graph, measurement_columns):
         belongs_to_node = (
             item["target_kind"] == "node"
             and item["target_id"] == node_id
             and node_id in graph.nodes
-        )
-        belongs_to_single_pv = (
-            item["target_kind"] in {"pv", "pv_equipment"}
-            and len(pv_nodes) == 1
-            and pv_nodes[0] == node_id
         )
         belongs_to_explicit_bus = (
             item["target_kind"] in {"pv", "pv_equipment"}
@@ -607,7 +586,6 @@ def prepare_node_time_series(
 
         if (
             not belongs_to_node
-            and not belongs_to_single_pv
             and not belongs_to_explicit_bus
         ):
             continue
@@ -631,7 +609,7 @@ def prepare_node_time_series(
             "variavel": variable,
             "unidade": unit,
             "rotulo_variavel": obter_rotulo_variavel(
-                variable
+                variable, unit,
             ),
             "coluna_original": item["column"],
             "tempo": time_values.copy(),
