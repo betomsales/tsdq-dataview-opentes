@@ -350,7 +350,7 @@
       <span><i class="ok"></i>Adequado</span>
       <span><i class="warn"></i>Precário</span>
       <span><i class="bad"></i>Crítico</span>
-      <span><i class="empty"></i>Sem medição</span>
+      <span><i class="empty"></i>Fase ausente / sem medição</span>
     </div>
   </div>
 
@@ -406,6 +406,7 @@
     let nodes = [];
     let links = [];
     let frames = [];
+    let voltageLimits = null;
     let frameIndex = 0;
     let graphId = "network";
     let restoredLayout = false;
@@ -436,6 +437,7 @@
       nodes = (graphData.nodes || []).map((item) => ({ ...item }));
       links = (graphData.edges || []).map((item) => ({ ...item }));
       frames = graphData.frames || [];
+      voltageLimits = graphData.voltageLimits || null;
       graphId = graphData.graphId || "network";
       const shouldResumeTimeline = timerId !== null || isStoredPlaybackActive();
       stopTimeline({ persist: false });
@@ -673,12 +675,14 @@
 
         if (!frameNode) {
           item.phases = { A: null, B: null, C: null };
+          item.absentPhases = [];
           item.voltage = null;
           item.measurements = 0;
           return;
         }
 
         item.phases = frameNode.phases;
+        item.absentPhases = frameNode.absentPhases || [];
         item.voltage = frameNode.voltage;
         item.measurements = frameNode.measurements;
       });
@@ -888,8 +892,19 @@
         .attr("transform", (item) => `translate(${item.x},${item.y})`);
     }
 
+    function phaseIsAbsent(item, phase) {
+      return (item.absentPhases || []).includes(phase);
+    }
+
+    function phaseText(item, phase) {
+      const value = item.phases[phase];
+      const text = Number.isFinite(value) ? `${value.toFixed(4)} pu` : "sem medição";
+      return phaseIsAbsent(item, phase) ? `ausente (${text})` : text;
+    }
+
     function numericValues(item) {
       return phases
+        .filter((phase) => !phaseIsAbsent(item, phase))
         .map((phase) => item.phases[phase])
         .filter((value) => Number.isFinite(value));
     }
@@ -898,11 +913,17 @@
       const values = numericValues(item);
 
       if (activeMode === "A" || activeMode === "B" || activeMode === "C") {
+        if (phaseIsAbsent(item, activeMode)) {
+          return null;
+        }
         const phaseValue = item.phases[activeMode];
         return Number.isFinite(phaseValue) ? phaseValue : null;
       }
 
       if (values.length === 0) {
+        if ((item.absentPhases || []).length > 0) {
+          return null;
+        }
         return Number.isFinite(item.voltage) ? item.voltage : null;
       }
 
@@ -938,15 +959,19 @@
         return "#E74C3C";
       }
 
-      if (value >= 0.93 && value <= 1.05) {
+      if (!voltageLimits) {
+        return fallback || "#d9d9d9";
+      }
+
+      if (value < voltageLimits.critico_min || value > voltageLimits.critico_max) {
+        return "#E74C3C";
+      }
+
+      if (value >= voltageLimits.adequado_min && value <= voltageLimits.adequado_max) {
         return "#2ECC71";
       }
 
-      if (value >= 0.90 && value <= 1.08) {
-        return "#F1C40F";
-      }
-
-      return "#E74C3C";
+      return "#F1C40F";
     }
 
     function refreshColors() {
@@ -980,7 +1005,9 @@
             (exit) => exit.remove()
           )
           .attr("d", d3.arc().innerRadius(0).outerRadius(18))
-          .attr("fill", (phaseItem) => colorFor(phaseItem.data.value, item.baseColor));
+          .attr("fill", (phaseItem) => phaseIsAbsent(item, phaseItem.data.phase)
+            ? "#D9D9D9"
+            : colorFor(phaseItem.data.value, item.baseColor));
 
         circle
           .attr("display", mode === "three" ? "none" : null)
@@ -1001,8 +1028,7 @@
     function tooltipText(item) {
       const values = phases
         .map((phase) => {
-          const value = item.phases[phase];
-          return `${phase}: ${Number.isFinite(value) ? value.toFixed(4) : "sem medição"}`;
+          return `${phase}: ${phaseText(item, phase)}`;
         })
         .join(" | ");
 
@@ -1012,9 +1038,7 @@
     function renderInfo(item) {
       const rows = phases
         .map((phase) => {
-          const value = item.phases[phase];
-          const text = Number.isFinite(value) ? `${value.toFixed(4)} pu` : "sem medição";
-          return `<span>${phase}</span><strong>${text}</strong>`;
+          return `<span>${phase}</span><strong>${phaseText(item, phase)}</strong>`;
         })
         .join("");
 

@@ -1,4 +1,5 @@
 import re
+from math import isfinite
 
 
 CLASSES_PRODIST = {
@@ -423,6 +424,14 @@ def classificar_tensao(
     """
     Classifica tensão conforme limites PRODIST informados.
     """
+
+    try:
+        valor = float(valor)
+    except (TypeError, ValueError):
+        return None
+
+    if not isfinite(valor):
+        return None
 
     if limites is None:
 

@@ -343,6 +343,11 @@ def montar_estrutura_analise_rede(
                 item.get("target_id"),
             ),
         }
+        if item["target_kind"] == "node":
+            node = graph.nodes.get(item["target_id"])
+            if node is not None and isinstance(node.metadata.get("nodes"), list):
+                variavel_info["fases_presentes"] = list(node.metadata["nodes"])
+
         variavel_info["rotulo_serie"] = montar_rotulo_serie(
             variavel_info,
             incluir_origem=True,

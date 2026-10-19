@@ -373,7 +373,7 @@ if graph is not None:
             st.caption(
                 f"Nós com tensão: {measured_nodes} de {graph.total_nodes}. "
                 "Verde: adequado; amarelo: precário; vermelho: crítico; "
-                "cinza: sem medição."
+                "cinza: fase ausente ou sem medição."
             )
 
             st.caption(

@@ -5,6 +5,9 @@ import re
 import pandas as pd
 import streamlit.components.v1 as st_components
 
+from utils.prodist import obter_limites_prodist
+
+from .cosim_loader import identificar_fases_ausentes
 from .topology_styles import (
     get_node_style,
     get_voltage_color,
@@ -134,6 +137,7 @@ def _graph_to_d3_payload(graph):
                     ["V3", "VC", "C"],
                 ),
             },
+            "absentPhases": node.metadata.get("absent_voltage_phases", []),
         })
 
     for edge in graph.edges.values():
@@ -156,6 +160,7 @@ def _graph_to_d3_payload(graph):
     return {
         "nodes": nodes,
         "edges": edges,
+        "voltageLimits": obter_limites_prodist(),
     }
 
 
@@ -207,6 +212,7 @@ def build_d3_temporal_frames(
     if results_df is None or measurement_columns is None:
         return []
 
+    absent_phases = identificar_fases_ausentes(graph, results_df, measurement_columns)
     phase_series = []
 
     for item in measurement_columns:
@@ -269,8 +275,8 @@ def build_d3_temporal_frames(
 
         for node_id, phases in values_by_node.items():
             measured_values = [
-                value for value in phases.values()
-                if value is not None
+                value for phase, value in phases.items()
+                if value is not None and phase not in absent_phases[node_id]
             ]
             voltage = None
 
@@ -280,6 +286,7 @@ def build_d3_temporal_frames(
             frame_nodes.append({
                 "id": node_id,
                 "phases": phases,
+                "absentPhases": absent_phases[node_id],
                 "voltage": voltage,
                 "measurements": len(measured_values),
             })

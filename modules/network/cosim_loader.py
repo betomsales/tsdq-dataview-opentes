@@ -3,6 +3,7 @@ import re
 
 import pandas as pd
 
+from utils.qee import motivo_fase_ausente
 from utils.rotulos_medicoes import (
     obter_categoria_equipamento,
     obter_nome_curto_elemento,
@@ -412,10 +413,38 @@ def load_cosim_results(uploaded_file):
     return df, measurement_columns, time_column, time_values
 
 
+def identificar_fases_ausentes(graph, df, measurement_columns):
+    """Identifica fases ausentes pela topologia ou pela serie completa."""
+    ausentes = {node_id: set() for node_id in graph.nodes}
+    nomes_fase = {"1": "A", "2": "B", "3": "C"}
+
+    for item in measurement_columns:
+        if item.get("target_kind") != "node":
+            continue
+        node = graph.nodes.get(item.get("target_id"))
+        coluna = item.get("column")
+        match = VOLTAGE_COLUMN_PATTERN.search(str(coluna))
+        if node is None or coluna not in df.columns or match is None:
+            continue
+
+        fase = match.group(2).upper()
+        valores = pd.to_numeric(df[coluna], errors="coerce").replace(
+            [float("inf"), -float("inf")], float("nan"),
+        )
+        if motivo_fase_ausente({
+            "fase": f"V{fase}",
+            "fases_presentes": node.metadata.get("nodes"),
+        }, valores):
+            ausentes[node.id].add(nomes_fase.get(fase, fase))
+
+    return {node_id: sorted(fases) for node_id, fases in ausentes.items()}
+
+
 def apply_measurement_snapshot(graph, df, measurement_columns, row_index):
     """Aplica todas as medições reconhecidas aos seus elementos no grafo."""
 
     row = df.iloc[row_index]
+    fases_ausentes = identificar_fases_ausentes(graph, df, measurement_columns)
     measured_nodes = set()
     measured_edges = set()
     associated_columns = set()
@@ -429,6 +458,7 @@ def apply_measurement_snapshot(graph, df, measurement_columns, row_index):
     for node in graph.nodes.values():
         node.voltage_pu = None
         node.metadata.pop("voltage_phases_pu", None)
+        node.metadata["absent_voltage_phases"] = fases_ausentes[node.id]
         node.metadata["measurements"] = []
 
     for edge in graph.edges.values():
@@ -489,9 +519,14 @@ def apply_measurement_snapshot(graph, df, measurement_columns, row_index):
 
     for node in graph.nodes.values():
         phases = node.metadata.get("voltage_phases_pu", {})
+        valores = [
+            value for fase, value in phases.items()
+            if {"V1": "A", "V2": "B", "V3": "C"}.get(fase, fase.removeprefix("V"))
+            not in fases_ausentes[node.id]
+        ]
 
-        if phases:
-            node.voltage_pu = sum(phases.values()) / len(phases)
+        if valores:
+            node.voltage_pu = sum(valores) / len(valores)
 
     graph.metadata["unassociated_measurements"] = unassociated
 
