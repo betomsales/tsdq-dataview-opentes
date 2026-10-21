@@ -83,7 +83,7 @@ class IndicadoresTensaoTest(unittest.TestCase):
         self.assertEqual(df["va"].iloc[5], "texto")
 
     def test_denominador_individual_e_fase_sem_dados(self):
-        df = pd.DataFrame({"va": [0, None], "vb": [None, None], "vc": [0, 1]})
+        df = pd.DataFrame({"va": [0, None], "vb": [None, math.inf], "vc": [0, 1]})
         resultado = calcular_drp_drc_por_fase(
             df, [
                 tensao(coluna, fase, fases_presentes=[1, 2, 3])
@@ -98,12 +98,12 @@ class IndicadoresTensaoTest(unittest.TestCase):
         self.assertEqual(c["drc"]["total"], 50)
         self.assertEqual(resultado["resumo"]["drc"]["fase"], "Fase A")
 
-    def test_fases_zeradas_ausentes_em_barras_mono_e_bifasicas(self):
+    def test_fases_nan_ausentes_em_barras_mono_e_bifasicas(self):
         variaveis = [tensao("va"), tensao("vb", "V2"), tensao("vc", "V3")]
         for dados, presentes, ausentes in (
-            ({"va": [1, 0.91], "vb": [0, 0], "vc": [0, 0]}, ["Fase A"], ["Fase B", "Fase C"]),
-            ({"va": [1, 1], "vb": [0, 0], "vc": [1, 1.06]}, ["Fase A", "Fase C"], ["Fase B"]),
-            ({"va": [0, 0], "vb": [0, 0], "vc": [1, 1]}, ["Fase C"], ["Fase A", "Fase B"]),
+            ({"va": [1, 0.91], "vb": [math.nan, math.nan], "vc": [math.nan, math.nan]}, ["Fase A"], ["Fase B", "Fase C"]),
+            ({"va": [1, 1], "vb": [math.nan, math.nan], "vc": [1, 1.06]}, ["Fase A", "Fase C"], ["Fase B"]),
+            ({"va": [math.nan, math.nan], "vb": [math.nan, math.nan], "vc": [1, 1]}, ["Fase C"], ["Fase A", "Fase B"]),
         ):
             with self.subTest(presentes=presentes):
                 df = pd.DataFrame(dados)
@@ -141,17 +141,48 @@ class IndicadoresTensaoTest(unittest.TestCase):
         self.assertEqual(resultado["resumo"]["drc"]["drc"]["total"], 100)
 
     def test_apenas_fases_ausentes_nao_resultam_em_drc_ou_drp_zero(self):
-        resultado = calcular_drp_drc_por_fase(pd.DataFrame({"va": [0, 0]}), [tensao("va")])
+        resultado = calcular_drp_drc_por_fase(pd.DataFrame({"va": [math.nan, math.nan]}), [tensao("va")])
         self.assertEqual(resultado["fases"], [])
         self.assertEqual(len(resultado["fases_ausentes"]), 1)
         self.assertEqual(resultado["resumo"], {"drp": None, "drc": None})
 
     def test_fase_inexistente_em_tensao_absoluta_nao_exige_referencia(self):
         resultado = calcular_drp_drc_por_fase(
-            pd.DataFrame({"vb": [0, 0]}), [tensao("vb", "V2", "V")],
+            pd.DataFrame({"vb": [math.nan, math.nan]}), [tensao("vb", "V2", "V")],
         )
         self.assertEqual(resultado["descartadas"], [])
         self.assertEqual(len(resultado["fases_ausentes"]), 1)
+
+    def test_serie_zerada_e_subtensao_critica_com_ou_sem_fases_no_json(self):
+        for fases in (None, [1, 2, 3]):
+            with self.subTest(fases=fases):
+                resultado = calcular_drp_drc_por_fase(
+                    pd.DataFrame({"va": [0, 0, None]}),
+                    [tensao("va", fases_presentes=fases)],
+                )
+                self.assertEqual(resultado["fases_ausentes"], [])
+                fase = resultado["fases"][0]
+                self.assertEqual(fase["amostras_validas"], 2)
+                self.assertEqual(fase["amostras_invalidas"], 1)
+                self.assertEqual(fase["drc"]["subtensao"], 100)
+                self.assertEqual(fase["drp"]["total"], 0)
+                self.assertEqual(resultado["dados_pu"]["va"].iloc[0], 0)
+
+    def test_serie_nan_indica_ausencia_mesmo_com_fases_no_json(self):
+        resultado = calcular_drp_drc_por_fase(
+            pd.DataFrame({"va": [math.nan, math.nan]}),
+            [tensao("va", fases_presentes=[1, 2, 3])],
+        )
+        self.assertEqual(resultado["fases"], [])
+        self.assertEqual(resultado["fases_ausentes"][0]["motivo"], "Ausência inferida pela série inteiramente NaN")
+
+    def test_nan_pontual_nao_torna_fase_ausente(self):
+        resultado = calcular_drp_drc_por_fase(
+            pd.DataFrame({"va": [math.nan, 1, 0, math.nan]}), [tensao("va")],
+        )
+        self.assertEqual(resultado["fases_ausentes"], [])
+        self.assertEqual(resultado["fases"][0]["amostras_validas"], 2)
+        self.assertEqual(resultado["fases"][0]["drc"]["subtensao"], 50)
 
     def test_fases_com_neutro_e_tensoes_fase_fase(self):
         for fase in ("V2", "VB", "VBN", "V12", "VAB"):

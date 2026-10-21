@@ -56,6 +56,7 @@ def rotulo_fase_tensao(variavel):
 
 
 def motivo_fase_ausente(variavel, valores):
+    """Usa a topologia ou uma serie nao vazia inteiramente NaN, nunca zeros."""
     fase = _codigo_fase_tensao(variavel.get("fase"))
     if fase not in {"A", "B", "C", "AB", "BA", "AC", "CA", "BC", "CB"}:
         return None
@@ -66,12 +67,9 @@ def motivo_fase_ausente(variavel, valores):
         if fases_json <= {"A", "B", "C", "0"}:
             if not set(fase) <= fases_json:
                 return "Fase não conectada no JSON"
-            # Uma fase declarada existente pode estar desenergizada.
-            return None
 
-    validos = valores.dropna()
-    if not validos.empty and validos.eq(0).all():
-        return "Ausência inferida pela série inteiramente zerada, sem fases no JSON"
+    if not valores.empty and valores.isna().all():
+        return "Ausência inferida pela série inteiramente NaN"
 
     return None
 
@@ -249,7 +247,7 @@ def _preparar_tensoes_pu(df, variaveis_tensao, referencias_tensao):
             valores = pd.to_numeric(df[coluna], errors="coerce").replace(
                 [math.inf, -math.inf], float("nan"),
             )
-            motivo_ausencia = motivo_fase_ausente(variavel, valores)
+            motivo_ausencia = motivo_fase_ausente(variavel, df[coluna])
             if motivo_ausencia:
                 fases_ausentes.append({
                     "fase": rotulo_fase_tensao(variavel),

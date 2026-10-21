@@ -416,7 +416,7 @@ def load_cosim_results(uploaded_file):
 
 
 def identificar_fases_ausentes(graph, df, measurement_columns):
-    """Identifica fases ausentes pela topologia ou pela serie completa."""
+    """Identifica fases ausentes pela topologia ou pela serie inteira NaN."""
     ausentes = {node_id: set() for node_id in graph.nodes}
     nomes_fase = {"1": "A", "2": "B", "3": "C"}
 
@@ -430,13 +430,10 @@ def identificar_fases_ausentes(graph, df, measurement_columns):
             continue
 
         fase = match.group(2).upper()
-        valores = pd.to_numeric(df[coluna], errors="coerce").replace(
-            [float("inf"), -float("inf")], float("nan"),
-        )
         if motivo_fase_ausente({
             "fase": f"V{fase}",
             "fases_presentes": node.metadata.get("nodes"),
-        }, valores):
+        }, df[coluna]):
             ausentes[node.id].add(nomes_fase.get(fase, fase))
 
     return {node_id: sorted(fases) for node_id, fases in ausentes.items()}

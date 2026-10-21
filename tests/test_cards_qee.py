@@ -86,7 +86,7 @@ render_cards_qee(
             with self.subTest(contextual=contextual):
                 app = self.app_qee(
                     contextual=contextual,
-                    dados={"va": [1, 0.91], "vb": [0, 0], "vc": [0, 0]},
+                    dados={"va": [1, 0.91], "vb": [None, None], "vc": [None, None]},
                 )
                 self.assertEqual(len(app.exception), 0)
                 tabela = self.indicadores(app)
@@ -97,11 +97,26 @@ render_cards_qee(
                 self.assertTrue(any("Fases ausentes: Fase B, Fase C" in c.value for c in app.caption))
 
     def test_todas_as_fases_ausentes_mantem_tabela_sem_indicador(self):
-        app = self.app_qee(dados={"va": [0, 0], "vb": [0, 0], "vc": [0, 0]})
+        app = self.app_qee(sem_dados=True)
         self.assertEqual(len(app.exception), 0)
         tabela = self.indicadores(app)
         self.assertTrue(tabela["DRC total (%)"].isna().all())
         self.assertTrue(tabela["Situação"].eq("Fase ausente").all())
+
+    def test_fases_zeradas_aparecem_como_subtensao_critica_nos_cartoes(self):
+        for contextual in (True, False):
+            with self.subTest(contextual=contextual):
+                app = self.app_qee(
+                    contextual=contextual,
+                    dados={"va": [0, 0], "vb": [None, None], "vc": [1, 1]},
+                )
+                self.assertEqual(len(app.exception), 0)
+                tabela = self.indicadores(app)
+                self.assertEqual(tabela.loc["Fase A", "DRC subtensão (%)"], 100)
+                self.assertEqual(tabela.loc["Fase A", "DRC total (%)"], 100)
+                self.assertNotEqual(tabela.loc["Fase A", "Situação"], "Fase ausente")
+                self.assertEqual(tabela.loc["Fase B", "Situação"], "Fase ausente")
+                self.assertEqual(tabela.loc["Fase C", "DRC total (%)"], 0)
 
     def test_metadados_de_fase_do_json_chegam_ao_calculo_qee(self):
         from components.analise_eletrica_rede import montar_estrutura_analise_rede
@@ -129,9 +144,11 @@ render_cards_qee(
                 else:
                     self.assertTrue(all("fases_presentes" not in v for v in variaveis))
                 resultado = calcular_drp_drc_por_fase(df, variaveis)
-                ausente = resultado["fases_ausentes"][0]["fase"]
-                self.assertEqual(ausente, "Fase B" if fases is not None else "Fase A")
-                self.assertEqual(resultado["resumo"]["drc"]["fase"], "Fase A" if fases is not None else "Fase B")
+                if fases is not None:
+                    self.assertEqual(resultado["fases_ausentes"][0]["fase"], "Fase B")
+                else:
+                    self.assertEqual(resultado["fases_ausentes"], [])
+                self.assertEqual(resultado["resumo"]["drc"]["fase"], "Fase A")
 
     def test_pagina_analise_eletrica_com_csv_carregado(self):
         from streamlit.testing.v1 import AppTest
