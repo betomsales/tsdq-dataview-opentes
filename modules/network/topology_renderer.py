@@ -8,6 +8,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+from components.identidade import style_plotly_figure
 from .topology_styles import (
     get_node_style,
     get_voltage_color,
@@ -140,4 +141,4 @@ def render_node_time_series(node_id, series):
             labels={"Valor": axis_label},
         )
         figure.update_layout(hovermode="x unified")
-        st.plotly_chart(figure, use_container_width=True)
+        st.plotly_chart(style_plotly_figure(figure), theme=None, use_container_width=True)

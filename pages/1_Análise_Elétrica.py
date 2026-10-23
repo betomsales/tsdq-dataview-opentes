@@ -1,4 +1,5 @@
 import streamlit as st
+from components.identidade import BASE_DIR, apply_brand_style, render_page_header
 from utils.leitura import ler_dados
 from utils.leitura import processar_tempo
 from utils.mapeamento import carregar_mapeamento
@@ -37,16 +38,17 @@ from utils.prodist import (
 
 
 st.set_page_config(
-    page_title="Análise Elétrica",
+    page_title="Análise Elétrica | ARGOS",
+    page_icon=str(BASE_DIR / "imagens" / "logo.png"),
     layout="wide"
 )
 
-st.title("Análise Elétrica")
-
-st.markdown("""
-Módulo para análise de resultados
-provenientes de simulações elétricas.
-""")
+apply_brand_style(workspace=True)
+render_page_header(
+    "Análise Elétrica",
+    "GRANDEZAS E QUALIDADE",
+    "Grandezas elétricas, séries temporais e indicadores de qualidade da energia.",
+)
 
 
 def render_controles_prodist(

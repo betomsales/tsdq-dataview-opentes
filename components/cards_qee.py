@@ -58,7 +58,7 @@ def card_qee(
                 valor_str = f"{valor:.4f}"
 
             linha = (
-                f"<div style='display:flex;"
+                f"<div class='grei-card-row' style='display:flex;"
                 f"justify-content:space-between;"
                 f"gap:1rem;"
                 f"margin-bottom:0.3rem;'>"
@@ -78,7 +78,7 @@ def card_qee(
 
     st.markdown(
         f"""
-        <div style="
+        <div class="grei-data-card" style="
             border-left: 6px solid {cor};
             padding: 1rem;
             border-radius: 0.5rem;
@@ -119,7 +119,7 @@ def card_qee_texto(
 
         for rotulo, valor in dados:
             linhas.append(
-                "<div style='display:flex;justify-content:space-between;"
+                "<div class='grei-card-row' style='display:flex;justify-content:space-between;"
                 "gap:1rem;margin-bottom:0.3rem;align-items:flex-start;'>"
                 "<span style='font-size:1.2rem;line-height:1.35;color:#4b5563;'>"
                 f"{escape(str(rotulo))}"
@@ -137,7 +137,7 @@ def card_qee_texto(
 
     st.markdown(
         f"""
-        <div style="
+        <div class="grei-data-card" style="
             border-left: 6px solid {cor};
             padding: 1rem;
             border-radius: 0.5rem;

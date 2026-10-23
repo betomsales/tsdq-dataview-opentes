@@ -4,6 +4,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import unicodedata
 
+from components.identidade import style_plotly_figure
 from utils.prodist import (
     obter_limites_prodist
 )
@@ -307,7 +308,8 @@ def render_grafico_individual(
     )
 
     st.plotly_chart(
-        fig,
+        style_plotly_figure(fig),
+        theme=None,
         use_container_width=True
     )
 
@@ -368,7 +370,8 @@ def render_grafico_multiserie(
     )
 
     st.plotly_chart(
-        fig_multiserie,
+        style_plotly_figure(fig_multiserie),
+        theme=None,
         use_container_width=True
     )
 
@@ -581,7 +584,8 @@ def render_grafico_distribuicao_tensao(
     )
 
     st.plotly_chart(
-        fig,
+        style_plotly_figure(fig),
+        theme=None,
         use_container_width=True
     )
 

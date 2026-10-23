@@ -2,6 +2,7 @@ import hashlib
 import json
 
 import streamlit as st
+from components.identidade import BASE_DIR, apply_brand_style, render_page_header
 
 from modules.network.dss_loader import (
     compile_circuit,
@@ -44,12 +45,16 @@ from io import BytesIO
 
 
 st.set_page_config(
-    page_title="Mapa de Rede",
+    page_title="Mapa de Rede | ARGOS",
+    page_icon=str(BASE_DIR / "imagens" / "logo.png"),
     layout="wide",
 )
 
-st.title(
-    "Mapa de Rede"
+apply_brand_style(workspace=True)
+render_page_header(
+    "Mapa de Rede",
+    "TOPOLOGIA E RESULTADOS",
+    "Topologia da rede, medições por barramento e análise temporal dos resultados.",
 )
 
 

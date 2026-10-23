@@ -1,4 +1,5 @@
 import streamlit as st
+from components.identidade import BASE_DIR, apply_brand_style, render_page_header
 
 from components.graficos_comunicacao import (
     render_cards_comunicacao,
@@ -20,17 +21,16 @@ from utils.comunicacao import (
 
 
 st.set_page_config(
-    page_title="Comunicação",
+    page_title="Comunicação | ARGOS",
+    page_icon=str(BASE_DIR / "imagens" / "logo.png"),
     layout="wide"
 )
 
-st.title("Comunicação")
-
-st.markdown(
-    """
-    Módulo para análise dos resultados de comunicação
-    provenientes da co-simulação.
-    """
+apply_brand_style(workspace=True)
+render_page_header(
+    "Comunicação",
+    "MENSAGENS E DESEMPENHO",
+    "Mensagens, latência, jitter e confiabilidade da comunicação na co-simulação.",
 )
 
 uploaded_file = render_upload(

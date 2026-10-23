@@ -4,6 +4,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from components.identidade import style_plotly_figure
 from components.graficos import aplicar_faixas_prodist_temporal
 from utils.escalas import obter_escala_visual
 from utils.rotulos_medicoes import montar_rotulo_serie
@@ -342,7 +343,8 @@ def render_oscilografia_no(
     )
 
     st.plotly_chart(
-        fig,
+        style_plotly_figure(fig),
+        theme=None,
         use_container_width=True,
         key=f"{key_prefix}_grafico",
     )

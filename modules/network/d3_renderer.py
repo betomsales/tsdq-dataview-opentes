@@ -5,6 +5,7 @@ import re
 import pandas as pd
 import streamlit.components.v1 as st_components
 
+from components.identidade import font_face_css
 from utils.prodist import obter_limites_prodist
 
 from .cosim_loader import identificar_fases_ausentes
@@ -339,6 +340,7 @@ def render_graph_d3(
 
     return _network_d3_component(
         graph_data=payload,
+        brand_font_css=font_face_css(),
         selected_node_id=selected_node_id,
         height=height,
         default=selected_node_id,

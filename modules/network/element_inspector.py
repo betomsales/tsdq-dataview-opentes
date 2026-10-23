@@ -276,7 +276,7 @@ def _render_card(
 
         for label, value in rows:
             lines.append(
-                '<div style="display:flex;justify-content:space-between;'
+                '<div class="grei-card-row" style="display:flex;justify-content:space-between;'
                 'gap:1rem;margin-bottom:0.35rem;align-items:flex-start;">'
                 '<span style="font-size:1.05rem;color:#4b5563;">'
                 f"{escape(str(label))}"
@@ -292,7 +292,7 @@ def _render_card(
         content = "".join(lines)
 
     st.markdown(
-        '<div style="border-left:6px solid '
+        '<div class="grei-data-card" style="border-left:6px solid '
         f"{color};padding:1rem;border-radius:0.5rem;"
         "background-color:#f7f7f7;margin-bottom:1rem;"
         f'min-height:{min_height};">'

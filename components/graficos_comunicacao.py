@@ -2,6 +2,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
+from components.identidade import style_plotly_figure
 from utils.comunicacao import classificar_agente
 
 
@@ -133,7 +134,8 @@ def render_grafico_latencia(df_expandido):
     )
 
     st.plotly_chart(
-        fig,
+        style_plotly_figure(fig),
+        theme=None,
         use_container_width=True
     )
 
@@ -163,7 +165,8 @@ def render_grafico_jitter(df_expandido):
     )
 
     st.plotly_chart(
-        fig,
+        style_plotly_figure(fig),
+        theme=None,
         use_container_width=True
     )
 
@@ -195,7 +198,8 @@ def render_grafico_payload(df_expandido):
     )
 
     st.plotly_chart(
-        fig,
+        style_plotly_figure(fig),
+        theme=None,
         use_container_width=True
     )
 
@@ -252,7 +256,8 @@ def render_grafico_confiabilidade(kpis):
     )
 
     st.plotly_chart(
-        fig,
+        style_plotly_figure(fig),
+        theme=None,
         use_container_width=True
     )
 

@@ -293,6 +293,65 @@
       background: #d9d9d9;
     }
 
+    .network-d3-root {
+      font-family: "Poppins", sans-serif;
+      color: #23342d;
+      border-color: #dce5df;
+    }
+
+    .network-d3-toolbar {
+      background: #edf3ee;
+      border-color: #dce5df;
+      flex-wrap: wrap;
+    }
+
+    .network-d3-modes button,
+    .network-d3-time button {
+      border-color: #cbdcd0;
+      color: #2f5e4b;
+      font-size: 12px;
+      min-height: 34px;
+    }
+
+    .network-d3-modes button:hover,
+    .network-d3-time button:hover {
+      background: #e6f0e9;
+      border-color: #2e8963;
+    }
+
+    .network-d3-modes button.active,
+    .network-d3-action {
+      background: #2f5e4b;
+      border-color: #2f5e4b;
+      color: #ffffff;
+    }
+
+    .network-d3-action:hover {
+      background: #244b3b;
+      border-color: #244b3b;
+    }
+
+    .network-d3-modes button:focus-visible,
+    .network-d3-time button:focus-visible,
+    .network-d3-action:focus-visible {
+      outline: 3px solid #00de81;
+      outline-offset: 2px;
+    }
+
+    .network-d3-time {flex-wrap: wrap;}
+    .network-d3-time input {accent-color: #2f5e4b;}
+    .network-d3-time span {color: #23342d; font-size: 12px;}
+    .network-d3-status,
+    .network-d3-legend,
+    .network-d3-card-sub,
+    .network-d3-card-grid span,
+    .network-d3-osc-head small,
+    .network-d3-osc-empty {color: #5d6d65; font-size: 12px;}
+    .network-d3-legend {border-color: #dce5df;}
+    .network-d3-card {border-color: #dce5df; color: #23342d; box-shadow: 0 6px 20px #23342d14;}
+    .network-d3-card-title {font-family: "Exo 2", sans-serif; font-weight: 700;}
+    .network-d3-osc-head span {font-family: "Exo 2", sans-serif; color: #23342d;}
+
     @media (max-width: 720px) {
       .network-d3-toolbar {
         align-items: flex-start;
@@ -427,6 +486,13 @@
     Streamlit.setComponentReady();
 
     function renderComponent(args) {
+      if (args.brand_font_css && !document.getElementById("grei-fonts")) {
+        const fontStyle = document.createElement("style");
+        fontStyle.id = "grei-fonts";
+        fontStyle.textContent = args.brand_font_css;
+        document.head.appendChild(fontStyle);
+      }
+
       if (!window.d3) {
         status.textContent = "D3 não carregado";
         updateFrameHeight(args.height || 640);
