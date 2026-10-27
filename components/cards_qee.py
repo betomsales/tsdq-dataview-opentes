@@ -241,8 +241,9 @@ def _render_indicadores_drp_drc(resultado):
             cores,
         ):
             dados = {
-                fase["fase"]: {"valor": fase[indicador][chave], "unidade": "%"}
-            } if fase else None
+                item["fase"]: {"valor": item[indicador][chave], "unidade": "%"}
+                for item in resultado["fases"]
+            } or None
 
             with coluna:
                 card_qee(f"{indicador.upper()} - {sufixo}", dados, cor)

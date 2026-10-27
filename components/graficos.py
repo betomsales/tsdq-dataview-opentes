@@ -174,7 +174,8 @@ def eh_tensao(variavel_info):
 def aplicar_faixas_prodist_temporal(
     fig,
     serie,
-    limites=None
+    limites=None,
+    mostrar_rotulos=True,
 ):
     """
     Adiciona zonas coloridas e linhas de limite PRODIST no eixo Y.
@@ -254,7 +255,7 @@ def aplicar_faixas_prodist_temporal(
             y=y,
             line_dash=dash,
             line_color=cor,
-            annotation_text=rotulo
+            **({"annotation_text": rotulo} if mostrar_rotulos else {}),
         )
 
 

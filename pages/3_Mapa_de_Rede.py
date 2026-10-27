@@ -1,6 +1,3 @@
-import hashlib
-import json
-
 import streamlit as st
 from components.identidade import BASE_DIR, apply_brand_style, render_page_header
 
@@ -42,6 +39,17 @@ from modules.network.cosim_loader import (
     prepare_node_time_series,
 )
 from io import BytesIO
+from modules.network.session_manager import (
+    aplicar_selecao_grafo,
+    normalizar_indice_instante,
+    sincronizar_selecao_barramento,
+)
+from utils.vinculo_arquivos import (
+    calcular_sha256_upload,
+    carregar_json_upload,
+    obter_hash_vinculado,
+    validar_vinculo,
+)
 
 
 st.set_page_config(
@@ -58,134 +66,18 @@ render_page_header(
 )
 
 
-def calcular_sha256_upload(uploaded_file):
-    uploaded_file.seek(0)
-    file_hash = hashlib.sha256(
-        uploaded_file.read()
-    ).hexdigest().upper()
-    uploaded_file.seek(0)
-
-    return file_hash
-
-
-def carregar_json_upload(uploaded_file):
-    uploaded_file.seek(0)
-    raw = uploaded_file.read()
-    uploaded_file.seek(0)
-
-    if isinstance(raw, bytes):
-        raw = raw.decode("utf-8-sig")
-
-    return json.loads(raw)
-
-
-def obter_hash_vinculado(topology_data):
-    metadata = topology_data.get(
-        "metadata",
-        {},
-    ) or {}
-
-    hash_data = topology_data.get(
-        "hash",
-        {},
-    ) or {}
-    metadata_hash_data = metadata.get(
-        "hash",
-        {},
-    ) or {}
-
-    candidatos = [
-        metadata.get("results_sha256"),
-        metadata.get("csv_sha256"),
-        metadata.get("sha256"),
-        metadata_hash_data.get("results_sha256")
-        if isinstance(metadata_hash_data, dict)
-        else None,
-        topology_data.get("results_sha256"),
-        topology_data.get("csv_sha256"),
-        topology_data.get("sha256"),
-        hash_data.get("results_sha256")
-        if isinstance(hash_data, dict)
-        else None,
-    ]
-
-    for hash_value in candidatos:
-        hash_text = str(hash_value or "").strip().upper()
-
-        if hash_text:
-            return hash_text
-
-    return ""
-
-def render_validacao_vinculo(
-    topology_data,
-    results_hash,
-):
-    expected_hash = obter_hash_vinculado(
-        topology_data
-    )
-
-    if not expected_hash:
-        st.error(
-            "Topologia sem vínculo SHA-256 com o arquivo CSV. "
-            "Solicite à equipe da co-simulação um JSON gerado com "
-            "metadata.results_sha256 ou campo SHA-256 equivalente."
-        )
-
-        return False
-
-    if expected_hash == results_hash:
-        st.success(
-            "Vínculo validado: a topologia corresponde ao CSV carregado."
-        )
-        return True
-
-    st.error(
-        "Vínculo inválido: o hash do CSV carregado não corresponde ao "
-        "hash registrado na topologia."
-    )
-    st.caption(
-        f"Hash esperado: {expected_hash}"
-    )
-    st.caption(
-        f"Hash do CSV carregado: {results_hash}"
-    )
-
-    return False
-
-
-def normalizar_indice_instante(value, max_value):
-    if max_value is None or max_value < 0:
-        return 0
-
+def render_validacao_vinculo(topology_data, results_hash):
     try:
-        index = int(value)
-    except (TypeError, ValueError):
-        index = 0
-
-    return min(
-        max(index, 0),
-        max_value,
-    )
-
-
-def extrair_evento_d3(evento):
-    if not isinstance(evento, dict):
-        return evento, None, None
-
-    node_id = evento.get("id") or evento.get("selectedNodeId")
-    frame_index = evento.get("frameIndex")
-    positions = evento.get("positions")
-    graph_id = evento.get("graphId")
-    layout_state = None
-
-    if graph_id and isinstance(positions, dict):
-        layout_state = {
-            "graphId": graph_id,
-            "positions": positions,
-        }
-
-    return node_id, frame_index, layout_state
+        validar_vinculo(topology_data, results_hash)
+    except ValueError as error:
+        st.error(str(error))
+        expected = obter_hash_vinculado(topology_data)
+        if expected:
+            st.caption(f"Hash esperado: {expected}")
+            st.caption(f"Hash do CSV carregado: {results_hash}")
+        return False
+    st.success("Vínculo validado: a topologia corresponde ao CSV carregado.")
+    return True
 
 
 input_mode = st.radio(
@@ -250,7 +142,8 @@ if input_mode == "Resultados da co-simulação":
                     time_column,
                     time_values,
                 ) = load_cosim_results(
-                    results_file
+                    results_file,
+                    graph=graph,
                 )
 
                 max_row_index = len(results_df) - 1
@@ -364,6 +257,9 @@ elif input_mode == "Circuito OpenDSS (.zip)":
 
 if graph is not None:
 
+        if graph.metadata.get("topology_version"):
+            st.caption(f"Formato da topologia: v{graph.metadata['topology_version']}")
+
         st.write(
             "Barramentos encontrados:",
             graph.total_nodes
@@ -376,7 +272,7 @@ if graph is not None:
             )
 
             st.caption(
-                f"Nós com tensão: {measured_nodes} de {graph.total_nodes}. "
+                f"Barramentos com medições: {measured_nodes} de {graph.total_nodes}. "
                 "Verde: adequado; amarelo: precário; vermelho: crítico; "
                 "cinza: fase ausente ou sem medição."
             )
@@ -439,33 +335,13 @@ if graph is not None:
 
         st.divider()
 
-        (
+        if aplicar_selecao_grafo(
+            st.session_state,
             clicked_node,
-            clicked_frame_index,
-            layout_state,
-        ) = extrair_evento_d3(
-            clicked_node
-        )
-        should_rerun = False
-
-        if layout_state:
-            st.session_state["network_d3_layout_state"] = layout_state
-
-        if clicked_frame_index is not None and results_df is not None:
-            frame_index = normalizar_indice_instante(
-                clicked_frame_index,
-                len(results_df) - 1,
-            )
-
-            if frame_index != st.session_state.get("network_selected_row"):
-                st.session_state["network_selected_row"] = frame_index
-                st.session_state["network_sync_selected_row_slider"] = True
-                should_rerun = True
-
-        if clicked_node in graph.nodes:
-            st.session_state["network_selected_node"] = clicked_node
-
-        if should_rerun:
+            graph.nodes,
+            max_row_index=len(results_df) - 1 if results_df is not None else None,
+            renderer=graph_renderer,
+        ):
             st.rerun()
 
         node_options = sorted(
@@ -482,9 +358,11 @@ if graph is not None:
             None,
             *node_options,
         ]
-        selection_index = selection_options.index(
-            current_node
-        )
+        if (
+            "network_node_selector" not in st.session_state
+            or st.session_state["network_node_selector"] not in selection_options
+        ):
+            st.session_state["network_node_selector"] = current_node
 
         def format_node_option(node_id):
 
@@ -501,8 +379,10 @@ if graph is not None:
         selected_node = st.selectbox(
             "Barramento analisado",
             selection_options,
-            index=selection_index,
             format_func=format_node_option,
+            key="network_node_selector",
+            on_change=sincronizar_selecao_barramento,
+            args=(st.session_state,),
         )
 
         if selected_node:
@@ -661,12 +541,13 @@ if graph is not None:
                 )
 
             with tab2:
-
-                for edge in graph.edges.values():
-
-                    st.write(
-                        f"{edge.source} → {edge.target}"
-                    )
+                st.dataframe([
+                    {"ID": edge.id, "Tipo": edge.edge_type, "Origem": edge.source,
+                     "Destino": edge.target,
+                     "Estado": ("Aberto" if edge.metadata["open"] else "Fechado")
+                     if "open" in edge.metadata else "Não informado"}
+                    for edge in graph.edges.values()
+                ], use_container_width=True, hide_index=True)
 
             with tab3:
 

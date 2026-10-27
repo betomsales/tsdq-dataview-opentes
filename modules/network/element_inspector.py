@@ -36,6 +36,9 @@ NODE_INFO = {
         "titulo": "Barramento Comum",
         "descricao": "Interligação da rede",
     },
+    "storage": {"titulo": "Armazenamento", "descricao": "Armazenamento conectado"},
+    "generator": {"titulo": "Gerador", "descricao": "Geração convencional conectada"},
+    "capacitor": {"titulo": "Capacitor", "descricao": "Capacitor conectado"},
 }
 
 
@@ -63,6 +66,8 @@ def _is_equipment_measurement(measurement):
     return measurement.get("target_kind") in {
         "pv",
         "pv_equipment",
+        "equipment",
+        "control",
     }
 
 
@@ -175,7 +180,7 @@ def _measurement_category(measurement):
             order,
         )
 
-    if variable.startswith("V") or unit in {"pu", "v", "kv"}:
+    if variable.startswith("V") or unit in {"v", "kv"}:
         return (
             "Tensão",
             "#f1c40f",
@@ -384,14 +389,17 @@ def render_edge_details(edge_id, graph):
     if edge is None:
         return
 
+    rows = [
+        ("ID", edge.id), ("Origem", edge.source),
+        ("Destino", edge.target), ("Classe", edge.edge_type),
+    ]
+    if "open" in edge.metadata:
+        rows.append(("Estado", "Aberto" if edge.metadata["open"] else "Fechado"))
+    if "phases" in edge.metadata:
+        rows.append(("Fases do ramo", edge.metadata["phases"]))
     _render_card(
         "Elemento de linha",
-        [
-            ("ID", edge.id),
-            ("Origem", edge.source),
-            ("Destino", edge.target),
-            ("Classe", edge.edge_type),
-        ],
+        rows,
         "#34495e",
         "130px",
     )
@@ -456,6 +464,15 @@ def render_node_details(
         ("Descrição", node_info["descricao"]),
         ("Conexões", len(neighbors)),
     ]
+    if node.metadata.get("roles"):
+        info_rows.append(("Características", ", ".join(
+            NODE_INFO.get(role, NODE_INFO["bus"])["titulo"]
+            for role in node.metadata["roles"]
+        )))
+    if node.metadata.get("kv_base") is not None:
+        info_rows.append(("Base informada", f"{node.metadata['kv_base']} kV"))
+    if "nodes" in node.metadata:
+        info_rows.append(("Nós conectados", ", ".join(map(str, node.metadata["nodes"]))))
 
     voltage_rows = [
         (
@@ -504,19 +521,39 @@ def render_node_details(
             "#8e44ad",
         )
 
+    connected = node.metadata.get("connected_elements", [])
+    if connected:
+        with st.expander("Equipamentos conectados", expanded=True):
+            st.caption("Cadastro topológico; os valores medidos são apresentados separadamente.")
+            st.dataframe([
+                {"Tipo": item["type"], "Nome": item["name"],
+                 "Nós conectados": ", ".join(map(str, item["nodes"])), "Fases do equipamento": item["phases"]}
+                for item in connected
+            ], use_container_width=True, hide_index=True)
+    if node.metadata.get("regcontrols"):
+        with st.expander("Regulação associada"):
+            st.dataframe([
+                {"Controle": item["name"], "Transformador": item["edge_id"], "Barra controlada": item["bus"]}
+                for item in node.metadata["regcontrols"]
+            ], use_container_width=True, hide_index=True)
+
     measurements = node.metadata.get("measurements", [])
 
     if _has_equipment_power_measurements(measurements):
-        st.caption(
+        caption = (
             "As potências exibidas neste barramento pertencem aos equipamentos "
-            "conectados a ele, não à barra como grandeza própria. O card de "
-            "estado fotovoltaico usa apenas a potência ativa do PVSystem, do "
-            "inversor ou do painel, nessa ordem de prioridade."
+            "conectados a ele, não à barra como grandeza própria."
         )
+        if any(item.get("target_kind") in {"pv", "pv_equipment"} for item in measurements):
+            caption += (
+                " O card de estado fotovoltaico usa apenas a potência ativa do "
+                "PVSystem, do inversor ou do painel, nessa ordem de prioridade."
+            )
+        st.caption(caption)
 
     estado_geracao_fv = montar_estado_geracao_fv_medicoes(
         measurements,
-        renderizar_sem_dados=node.node_type == "pv",
+        renderizar_sem_dados=node.node_type == "pv" or "pv" in node.metadata.get("roles", []),
     )
 
     if estado_geracao_fv:

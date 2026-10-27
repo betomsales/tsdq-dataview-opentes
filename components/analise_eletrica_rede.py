@@ -3,7 +3,7 @@ import re
 import pandas as pd
 import streamlit as st
 
-from modules.network.pv_binding import vincular_medicoes_pv
+from modules.network.measurement_binding import vincular_medicoes_rede
 from components.graficos import (
     eh_tensao,
     render_grafico_distribuicao_tensao,
@@ -42,6 +42,7 @@ from utils.rotulos_medicoes import (
 
 
 TIPO_TENSAO = "Tensão"
+TIPO_ANGULO_TENSAO = "Ângulo de Tensão (°)"
 TIPO_CORRENTE = "Corrente (A)"
 TIPO_ANGULO_CORRENTE = "Ângulo de Corrente (°)"
 TIPO_TAP = "Taps dos Reguladores"
@@ -172,7 +173,7 @@ def _classificar_variavel(item):
     if variavel_lower == "tap":
         return TIPO_TAP, None, unidade
 
-    if variavel_lower.startswith("p_gen"):
+    if variavel_lower.startswith("p_gen") and item["target_kind"] in {"pv", "pv_equipment"}:
         return TIPO_POTENCIA_FV, None, unidade
 
     match_p = re.match(
@@ -221,6 +222,8 @@ def _classificar_variavel(item):
     )
 
     if fase:
+        if unidade == "°":
+            return TIPO_ANGULO_TENSAO, fase, unidade
         return TIPO_TENSAO, fase, unidade
 
     fase = _fase_por_prefixo(
@@ -242,7 +245,9 @@ def _pertence_ao_no(
     item,
     node_id,
 ):
-    item = vincular_medicoes_pv(graph, [item])[0]
+    item = vincular_medicoes_rede(graph, [item])[0]
+    if item.get("binding_error"):
+        return False
 
     if (
         item["target_kind"] == "node"
@@ -252,7 +257,7 @@ def _pertence_ao_no(
         return True
 
     if (
-        item["target_kind"] in {"pv", "pv_equipment"}
+        item["target_kind"] in {"pv", "pv_equipment", "equipment", "control"}
         and item.get("target_node_id") == node_id
         and node_id in graph.nodes
     ):
@@ -274,6 +279,9 @@ def _elemento_da_medicao(item):
     if item["target_kind"] == "pv_equipment":
         return f"equipamento:{item['target_id']}"
 
+    if item["target_kind"] in {"equipment", "control"}:
+        return f"equipamento:{item['entity_type'].lower()}:{item['target_id']}"
+
     return item["target_id"]
 
 
@@ -290,6 +298,9 @@ def _tipo_entidade(item):
     if item["target_kind"] == "pv_equipment":
         return "Equipamento"
 
+    if item["target_kind"] in {"equipment", "control"}:
+        return "Equipamento"
+
     return "Outro"
 
 
@@ -300,7 +311,9 @@ def montar_estrutura_analise_rede(
     estrutura = {}
     mapeamento = carregar_mapeamento()
 
-    for item in vincular_medicoes_pv(graph, measurement_columns):
+    for item in vincular_medicoes_rede(graph, measurement_columns):
+        if item.get("binding_error") or item["target_kind"] == "unassociated":
+            continue
         elemento = _elemento_da_medicao(
             item
         )
@@ -341,6 +354,9 @@ def montar_estrutura_analise_rede(
             node = graph.nodes.get(item["target_id"])
             if node is not None and isinstance(node.metadata.get("nodes"), list):
                 variavel_info["fases_presentes"] = list(node.metadata["nodes"])
+        if item["target_kind"] in {"equipment", "control"}:
+            variavel_info["categoria_card"] = None
+            variavel_info["nome_curto_elemento"] = f"{item['entity_type']} {item['entity_name']}"
 
         variavel_info["rotulo_serie"] = montar_rotulo_serie(
             variavel_info,
@@ -359,6 +375,8 @@ def montar_estrutura_analise_rede(
                 "Equipamento",
             },
         )
+        if item["target_kind"] in {"equipment", "control"}:
+            variavel_info["rotulo_card"] = variavel_info["nome_curto_elemento"]
 
         estrutura.setdefault(
             tipo,

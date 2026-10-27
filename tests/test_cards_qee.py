@@ -3,6 +3,7 @@ import io
 import json
 from pathlib import Path
 import unittest
+from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
@@ -73,6 +74,68 @@ render_cards_qee(
         tabela = self.indicadores(app)
         self.assertEqual(tabela.loc["Fase A", "DRP total (%)"], 20)
         self.assertEqual(tabela.loc["Fase A", "DRC total (%)"], 40)
+
+    def test_cartoes_incluem_fase_b_mesmo_quando_a_e_c_sao_os_maiores_indicadores(self):
+        for contextual in (True, False):
+            with self.subTest(contextual=contextual):
+                app = self.app_qee(
+                    contextual=contextual,
+                    dados={"va": [0.91, 0.91, 0.91, 1], "vb": [0, 1.06, 1, 1], "vc": [1.10] * 4},
+                )
+                self.assertEqual(len(app.exception), 0)
+                cards = [
+                    item.value for item in app.markdown
+                    if "DRP - " in item.value or "DRC - " in item.value
+                ]
+                self.assertEqual(len(cards), 6)
+                for card in cards:
+                    for fase in ("Fase A", "Fase B", "Fase C"):
+                        self.assertIn(fase, card)
+                self.assertTrue(any("Maior DRP: Fase A" in item.value for item in app.caption))
+                self.assertTrue(any("Maior DRC: Fase C" in item.value for item in app.caption))
+
+    def test_valores_da_fase_b_nos_cartoes_sao_os_da_propria_fase(self):
+        from components.cards_qee import _render_indicadores_drp_drc
+        from utils.qee import calcular_drp_drc_por_fase
+
+        df = pd.DataFrame({"va": [0.91] * 4, "vb": [0.91, 1.06, 1, 1], "vc": [1.10] * 4})
+        variaveis = [
+            {"tipo": "Tensão", "fase": f"V{i + 1}", "unidade_detectada": "pu", "coluna_original": coluna}
+            for i, coluna in enumerate(df.columns)
+        ]
+        resultado = calcular_drp_drc_por_fase(df, variaveis)
+        with patch("components.cards_qee.st") as streamlit, patch("components.cards_qee.card_qee") as card:
+            streamlit.columns.side_effect = lambda count: [MagicMock() for _ in range(count)]
+            _render_indicadores_drp_drc(resultado)
+        cards = {call.args[0]: call.args[1] for call in card.call_args_list}
+        for titulo, esperado in (
+            ("DRP - total", 25), ("DRP - subtensão", 25), ("DRP - sobretensão", 0),
+            ("DRC - total", 25), ("DRC - subtensão", 0), ("DRC - sobretensão", 25),
+        ):
+            self.assertEqual(cards[titulo]["Fase B"], {"valor": esperado, "unidade": "%"})
+
+    def test_fase_b_ausente_nao_recebe_percentuais_inventados(self):
+        app = self.app_qee(dados={"va": [1, 0.91], "vb": [None, None], "vc": [1, 1]})
+        self.assertEqual(len(app.exception), 0)
+        cards = [item.value for item in app.markdown if "DRP - " in item.value or "DRC - " in item.value]
+        self.assertEqual(len(cards), 6)
+        self.assertTrue(all("Fase B" not in card for card in cards))
+        self.assertTrue(any("Fases ausentes: Fase B" in item.value for item in app.caption))
+
+    def test_fase_b_zerada_tem_drc_subtensao_integral_no_cartao(self):
+        from components.cards_qee import _render_indicadores_drp_drc
+        from utils.qee import calcular_drp_drc_por_fase
+
+        df = pd.DataFrame({"vb": [0, 0]})
+        variaveis = [{"tipo": "Tensão", "fase": "V2", "unidade_detectada": "pu", "coluna_original": "vb"}]
+        resultado = calcular_drp_drc_por_fase(df, variaveis)
+        with patch("components.cards_qee.st") as streamlit, patch("components.cards_qee.card_qee") as card:
+            streamlit.columns.side_effect = lambda count: [MagicMock() for _ in range(count)]
+            _render_indicadores_drp_drc(resultado)
+        cards = {call.args[0]: call.args[1] for call in card.call_args_list}
+        self.assertEqual(cards["DRC - subtensão"]["Fase B"]["valor"], 100)
+        self.assertEqual(cards["DRC - total"]["Fase B"]["valor"], 100)
+        self.assertEqual(cards["DRP - total"]["Fase B"]["valor"], 0)
 
     def test_ausencia_de_dados_nao_exibe_nan(self):
         app = self.app_qee(sem_dados=True)

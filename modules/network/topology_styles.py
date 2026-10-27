@@ -39,6 +39,9 @@ def get_node_style(node):
             "border": "#808080",
             "background": "#D9D9D9",
         },
+        "storage": {"border": "#087E8B", "background": "#D9D9D9"},
+        "generator": {"border": "#BC6C25", "background": "#D9D9D9"},
+        "capacitor": {"border": "#5A638C", "background": "#D9D9D9"},
     }
 
     return styles.get(

@@ -9,6 +9,7 @@ from components.identidade import font_face_css
 from utils.prodist import obter_limites_prodist
 
 from .cosim_loader import identificar_fases_ausentes
+from .measurement_binding import vincular_medicoes_rede
 from .topology_styles import (
     get_node_style,
     get_voltage_color,
@@ -153,6 +154,7 @@ def _graph_to_d3_payload(graph):
             "source": edge.source,
             "target": edge.target,
             "type": edge.edge_type,
+            "open": edge.metadata.get("open"),
             "measurements": len(
                 edge_measurements
             ),
@@ -216,7 +218,7 @@ def build_d3_temporal_frames(
     absent_phases = identificar_fases_ausentes(graph, results_df, measurement_columns)
     phase_series = []
 
-    for item in measurement_columns:
+    for item in vincular_medicoes_rede(graph, measurement_columns):
         if item.get("target_kind") != "node":
             continue
 
@@ -343,6 +345,6 @@ def render_graph_d3(
         brand_font_css=font_face_css(),
         selected_node_id=selected_node_id,
         height=height,
-        default=selected_node_id,
+        default=None,
         key=key,
     )

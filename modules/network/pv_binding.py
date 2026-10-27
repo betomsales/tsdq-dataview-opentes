@@ -18,9 +18,12 @@ def _indice_pvs(graph):
 
     indice = {}
     declarados = set()
-    possui_cadastro = bool(anexos)
+    possui_cadastro = graph.metadata.get("topology_version") == 2 or bool(anexos)
     for elemento in graph.metadata.get("elements") or []:
-        if not isinstance(elemento, dict) or _normalizar(elemento.get("element_type")) != "pv":
+        if not isinstance(elemento, dict) or (
+            _normalizar(elemento.get("element_type")) != "pv"
+            and _normalizar(elemento.get("type")) != "pvsystem"
+        ):
             continue
         possui_cadastro = True
         aliases = {_normalizar(elemento.get(campo)) for campo in ("id", "name")} - {""}

@@ -46,6 +46,23 @@ def aplicar_hash_no_json(
     caminho_json: Path,
     csv_hash: str,
 ) -> dict:
+    if topology_data.get("version") == 2:
+        topology_data.update({
+            "results_file": caminho_csv.name,
+            "results_sha256": csv_hash,
+            "hash_algorithm": "sha256",
+            "hash_generated_at": datetime.now(timezone.utc).isoformat(),
+        })
+        # Align existing aliases only when the user explicitly reapplies the hash.
+        metadata = topology_data.get("metadata")
+        for container in (topology_data, topology_data.get("hash"), metadata,
+                          metadata.get("hash") if isinstance(metadata, dict) else None):
+            if isinstance(container, dict):
+                for key in ("results_sha256", "csv_sha256", "sha256"):
+                    if key in container:
+                        container[key] = csv_hash
+        return topology_data
+
     metadata = topology_data.get("metadata")
 
     if not isinstance(metadata, dict):
@@ -83,8 +100,8 @@ def definir_saida(
 def criar_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Calcula o SHA-256 de um CSV e grava esse vinculo no metadata "
-            "do JSON de topologia."
+            "Calcula o SHA-256 de um CSV e grava o vínculo na raiz do JSON v2 "
+            "ou no metadata do formato legado."
         )
     )
     parser.add_argument(

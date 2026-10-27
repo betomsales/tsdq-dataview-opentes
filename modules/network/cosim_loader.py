@@ -13,7 +13,8 @@ from utils.rotulos_medicoes import (
 from utils.unidades import inferir_unidade_variavel, normalizar_unidade
 
 from .graph_model import NetworkEdge, NetworkGraph, NetworkNode
-from .pv_binding import vincular_medicoes_pv
+from .measurement_binding import vincular_medicoes_rede
+from .topology_adapter import adapt_topology
 
 
 VOLTAGE_COLUMN_PATTERN = re.compile(
@@ -94,6 +95,8 @@ def _measurement(
     target_kind=None,
     target_id=None,
     target_node_id=None,
+    entity_type=None,
+    entity_name=None,
 ):
     variable_name, unit = _split_variable_unit(variable)
     unit = (
@@ -108,7 +111,7 @@ def _measurement(
         unit
     )
 
-    return {
+    result = {
         "grupo": group,
         "variavel": variable_name,
         "unidade": unit,
@@ -129,200 +132,39 @@ def _measurement(
         "target_kind": target_kind,
         "target_id": target_id,
         "target_node_id": target_node_id,
+        "entity_type": entity_type,
+        "entity_name": entity_name,
     }
-
-
-def _normalizar_id(value):
-    return str(value).strip().lower()
-
-
-def _metadata_item(item):
-    metadata = item.get("metadata")
-
-    if isinstance(metadata, dict):
-        return metadata.copy()
-
-    return {}
-
-
-def _primeiro_valor(item, nomes):
-    for nome in nomes:
-        if nome in item and item[nome] is not None:
-            return item[nome]
-
-    return None
+    if target_kind in {"equipment", "control"}:
+        result["categoria_card"] = None
+        result["nome_curto_elemento"] = f"{entity_type} {entity_name}"
+    return result
 
 
 def _valor_numerico(value):
     try:
-        if value is None or pd.isna(value):
-            return None
-
-        return float(value)
-
+        return None if value is None or pd.isna(value) else float(value)
     except (TypeError, ValueError):
         return None
 
 
-def _metadata_global_topologia(data):
-    metadata = data.get("metadata")
-
-    if not isinstance(metadata, dict):
-        metadata = {}
-    else:
-        metadata = metadata.copy()
-
-    if "elements" in data:
-        metadata["elements"] = data.get("elements") or []
-
-    metadata["topology_schema_keys"] = sorted(
-        str(key)
-        for key in data.keys()
-    )
-
-    return metadata
-
-
 def load_topology_json(uploaded_file):
-    """Converte o JSON de topologia da co-simulacao em NetworkGraph.
-
-    O loader aceita o formato legado nodes/edges e o formato mais novo com
-    metadados topologicos por no, como coordenadas x/y e lista elements.
-    """
-
+    """Lê o formato de origem e instancia o grafo após sua normalização."""
     uploaded_file.seek(0)
     raw = uploaded_file.read()
-
     if isinstance(raw, bytes):
         raw = raw.decode("utf-8-sig")
-
-    data = json.loads(raw)
-
-    if not isinstance(data, dict):
-        raise ValueError("O JSON de topologia deve ter um objeto na raiz.")
-
-    nodes = data.get("nodes")
-    edges = data.get("edges") or data.get("links") or data.get("branches")
-
-    if not isinstance(nodes, list) or not isinstance(edges, list):
-        raise ValueError(
-            "O JSON deve conter as listas 'nodes' e 'edges' "
-            "ou campos equivalentes 'links'/'branches'."
-        )
-
+    topology = adapt_topology(json.loads(raw))
     graph = NetworkGraph()
-    graph.metadata = _metadata_global_topologia(
-        data
-    )
-
-    for item in nodes:
-        if not isinstance(item, dict):
-            continue
-
-        raw_id = _primeiro_valor(
-            item,
-            ["id", "name", "bus", "label"],
-        )
-
-        if raw_id is None:
-            raise ValueError("Um no da topologia nao possui identificador.")
-
-        node_id = _normalizar_id(
-            raw_id
-        )
-        metadata = _metadata_item(
-            item
-        )
-        metadata.setdefault(
-            "topology_id_original",
-            str(raw_id),
-        )
-
-        voltage_pu = _primeiro_valor(
-            item,
-            ["voltage_pu", "voltage", "v_pu"],
-        )
-        voltage_pu = _valor_numerico(
-            voltage_pu
-        )
-
-        graph.add_node(
-            NetworkNode(
-                id=node_id,
-                label=str(item.get("label", raw_id)),
-                node_type=str(
-                    item.get("node_type")
-                    or item.get("type")
-                    or metadata.get("node_type")
-                    or "bus"
-                ),
-                voltage_pu=voltage_pu,
-                metadata=metadata,
-            )
-        )
-
-    for item in edges:
-        if not isinstance(item, dict):
-            continue
-
-        source_raw = _primeiro_valor(
-            item,
-            ["source", "from", "from_bus", "bus1"],
-        )
-        target_raw = _primeiro_valor(
-            item,
-            ["target", "to", "to_bus", "bus2"],
-        )
-
-        if source_raw is None or target_raw is None:
-            raise ValueError("Uma conexao da topologia nao possui origem/destino.")
-
-        source = _normalizar_id(
-            source_raw
-        )
-        target = _normalizar_id(
-            target_raw
-        )
-
-        edge_id = _primeiro_valor(
-            item,
-            ["id", "name"],
-        )
-
-        if edge_id is None:
-            edge_id = f"{source}_{target}"
-
-        if source not in graph.nodes or target not in graph.nodes:
-            raise ValueError(
-                f"A conexao '{edge_id}' referencia um no inexistente."
-            )
-
-        metadata = _metadata_item(
-            item
-        )
-        metadata.setdefault(
-            "topology_id_original",
-            str(edge_id),
-        )
-
-        graph.add_edge(
-            NetworkEdge(
-                id=str(edge_id),
-                source=source,
-                target=target,
-                edge_type=str(
-                    item.get("edge_type")
-                    or item.get("type")
-                    or metadata.get("edge_type")
-                    or "line"
-                ),
-                metadata=metadata,
-            )
-        )
-
+    graph.metadata = topology["metadata"]
+    for item in topology["nodes"]:
+        item["voltage_pu"] = _valor_numerico(item["voltage_pu"])
+        graph.add_node(NetworkNode(**item))
+    for item in topology["edges"]:
+        graph.add_edge(NetworkEdge(**item))
     return graph
 
-def load_cosim_results(uploaded_file):
+def load_cosim_results(uploaded_file, graph=None):
     """Lê o CSV e cataloga todas as séries por elemento da co-simulação."""
 
     uploaded_file.seek(0)
@@ -334,7 +176,7 @@ def load_cosim_results(uploaded_file):
 
     measurement_columns = []
 
-    for column in df.columns:
+    for column in df.columns[1:]:
         match = BUS_COLUMN_PATTERN.match(column)
 
         if match:
@@ -399,6 +241,13 @@ def load_cosim_results(uploaded_file):
                 "group": group,
                 "variable": match.group(3),
             })
+            continue
+
+        measurement_columns.append({
+            "column": column, "variable": column, "target_kind": "unassociated",
+            "target_id": "", "group": "Não associado",
+            "binding_error": "Coluna não reconhecida pelo catálogo de medições.",
+        })
 
     if not measurement_columns:
         raise ValueError(
@@ -412,6 +261,8 @@ def load_cosim_results(uploaded_file):
         errors="coerce",
     )
 
+    if graph is not None:
+        measurement_columns = vincular_medicoes_rede(graph, measurement_columns)
     return df, measurement_columns, time_column, time_values
 
 
@@ -420,7 +271,7 @@ def identificar_fases_ausentes(graph, df, measurement_columns):
     ausentes = {node_id: set() for node_id in graph.nodes}
     nomes_fase = {"1": "A", "2": "B", "3": "C"}
 
-    for item in measurement_columns:
+    for item in vincular_medicoes_rede(graph, measurement_columns):
         if item.get("target_kind") != "node":
             continue
         node = graph.nodes.get(item.get("target_id"))
@@ -458,11 +309,8 @@ def apply_measurement_snapshot(graph, df, measurement_columns, row_index):
     for edge in graph.edges.values():
         edge.metadata["measurements"] = []
 
-    for item in vincular_medicoes_pv(graph, measurement_columns):
+    for item in vincular_medicoes_rede(graph, measurement_columns):
         value = pd.to_numeric(row[item["column"]], errors="coerce")
-
-        if pd.isna(value):
-            continue
 
         target = None
 
@@ -472,18 +320,21 @@ def apply_measurement_snapshot(graph, df, measurement_columns, row_index):
         elif item["target_kind"] == "edge":
             target = graph.edges.get(item["target_id"])
 
-        elif item["target_kind"] in {"pv", "pv_equipment"}:
+        elif item["target_kind"] in {"pv", "pv_equipment", "equipment", "control"}:
             target_node_id = item.get("target_node_id")
 
             if target_node_id:
                 target = graph.nodes.get(target_node_id)
 
-        if target is None:
+        if target is None or item.get("binding_error"):
             unassociated.append({
                 "coluna_original": item["column"],
-                "valor": float(value),
+                "valor": None if pd.isna(value) else float(value),
                 "motivo": item.get("binding_error") or "Elemento correspondente não encontrado na topologia",
             })
+            continue
+
+        if pd.isna(value):
             continue
 
         measurement = _measurement(
@@ -494,6 +345,8 @@ def apply_measurement_snapshot(graph, df, measurement_columns, row_index):
             item["target_kind"],
             item["target_id"],
             item.get("target_node_id"),
+            item.get("entity_type"),
+            item.get("entity_name"),
         )
         target.metadata["measurements"].append(measurement)
         associated_columns.add(item["column"])
@@ -546,10 +399,12 @@ def get_monitored_node_ids(graph, measurement_columns):
     """Retorna somente nós que possuem ao menos uma coluna real no CSV."""
 
     monitored = set()
-    for item in vincular_medicoes_pv(graph, measurement_columns):
+    for item in vincular_medicoes_rede(graph, measurement_columns):
+        if item.get("binding_error"):
+            continue
         if item["target_kind"] == "node" and item["target_id"] in graph.nodes:
             monitored.add(item["target_id"])
-        elif item["target_kind"] in {"pv", "pv_equipment"}:
+        elif item["target_kind"] in {"pv", "pv_equipment", "equipment", "control"}:
             target_node_id = item.get("target_node_id")
 
             if target_node_id and target_node_id in graph.nodes:
@@ -569,14 +424,16 @@ def prepare_node_time_series(
 
     series = []
 
-    for item in vincular_medicoes_pv(graph, measurement_columns):
+    for item in vincular_medicoes_rede(graph, measurement_columns):
+        if item.get("binding_error"):
+            continue
         belongs_to_node = (
             item["target_kind"] == "node"
             and item["target_id"] == node_id
             and node_id in graph.nodes
         )
         belongs_to_explicit_bus = (
-            item["target_kind"] in {"pv", "pv_equipment"}
+            item["target_kind"] in {"pv", "pv_equipment", "equipment", "control"}
             and item.get("target_node_id") == node_id
             and node_id in graph.nodes
         )

@@ -1,5 +1,3 @@
-import unicodedata
-
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -7,7 +5,9 @@ import streamlit as st
 from components.identidade import style_plotly_figure
 from components.graficos import aplicar_faixas_prodist_temporal
 from utils.escalas import obter_escala_visual
+from utils.qee import eh_magnitude_tensao
 from utils.rotulos_medicoes import montar_rotulo_serie
+from utils.unidades import normalizar_unidade
 
 
 CORES_FASES = {
@@ -35,27 +35,6 @@ ORDEM_FASES = {
 }
 
 
-def _normalizar_texto(texto):
-    texto = str(texto or "")
-    texto = unicodedata.normalize(
-        "NFKD",
-        texto,
-    )
-    texto = texto.encode(
-        "ascii",
-        errors="ignore",
-    ).decode(
-        "ascii",
-    )
-    return texto.lower().strip()
-
-
-def _eh_tensao(variavel):
-    return _normalizar_texto(
-        variavel.get("tipo")
-    ) == "tensao"
-
-
 def _ordem_variavel(variavel):
     fase = str(
         variavel.get("fase") or ""
@@ -77,7 +56,7 @@ def _variaveis_tensao_no(estrutura, node_id):
                 continue
 
             for variavel in itens:
-                if _eh_tensao(variavel):
+                if eh_magnitude_tensao(variavel):
                     variaveis.append(variavel)
 
     return sorted(
@@ -158,13 +137,19 @@ def render_oscilografia_no(
         )
         return
 
-    unidade_original = colunas_validas[0].get(
-        "unidade_detectada"
-    )
-    unidades = {
-        variavel.get("unidade_detectada")
+    unidades = list(dict.fromkeys(
+        normalizar_unidade(variavel.get("unidade_detectada"))
         for variavel in colunas_validas
-    }
+    ))
+    unidade_original = unidades[0]
+    if len(unidades) > 1:
+        unidade_original = st.selectbox(
+            "Unidade das tensões", unidades, key=f"{key_prefix}_unidade",
+        )
+        colunas_validas = [
+            variavel for variavel in colunas_validas
+            if normalizar_unidade(variavel.get("unidade_detectada")) == unidade_original
+        ]
 
     valores_base = []
     df_plot = pd.DataFrame()
@@ -173,7 +158,7 @@ def render_oscilografia_no(
 
     for variavel in colunas_validas:
         coluna = variavel["coluna_original"]
-        rotulo = montar_rotulo_serie(
+        rotulo = variavel.get("fase") or montar_rotulo_serie(
             variavel,
             incluir_origem=False,
         )
@@ -197,14 +182,10 @@ def render_oscilografia_no(
         ignore_index=True,
     )
 
-    unidade_final = unidade_original
-    fator_visual = 1.0
-
-    if len(unidades) == 1:
-        unidade_final, fator_visual = obter_escala_visual(
-            serie_conjunta,
-            unidade_original,
-        )
+    unidade_final, fator_visual = obter_escala_visual(
+        serie_conjunta,
+        unidade_original,
+    )
 
     for rotulo, _variavel in nomes_series:
         df_plot[rotulo] = df_plot[rotulo] * fator_visual
@@ -264,10 +245,13 @@ def render_oscilografia_no(
             yref="paper",
             text="Instante do grafo",
             showarrow=False,
-            yanchor="bottom",
+            yanchor="top",
+            yshift=-8,
+            xanchor="left" if indice_atual < len(df_plot) / 2 else "right",
+            bgcolor="rgba(255,255,255,0.9)",
             font={
                 "color": "#111827",
-                "size": 12,
+                "size": 10,
             },
         )
 
@@ -319,10 +303,12 @@ def render_oscilografia_no(
                 [df_plot[rotulo] for rotulo, _ in nomes_series],
                 ignore_index=True,
             ),
+            mostrar_rotulos=False,
         )
 
     fig.update_layout(
-        title="Tensões do barramento selecionado",
+        title=None,
+        height=420,
         xaxis_title="Tempo",
         yaxis_title=label_y,
         hovermode="x unified",
@@ -330,8 +316,8 @@ def render_oscilografia_no(
         margin={
             "l": 20,
             "r": 20,
-            "t": 54,
-            "b": 20,
+            "t": 50,
+            "b": 50,
         },
         legend={
             "orientation": "h",

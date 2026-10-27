@@ -68,6 +68,11 @@ def render_graph(
                 target=edge.target,
                 width=4,
                 color="#B8B8B8",
+                dashes=edge.metadata.get("open") is True,
+                title=f"{edge.id}" + (
+                    f" - {'Aberto' if edge.metadata['open'] else 'Fechado'}"
+                    if "open" in edge.metadata else ""
+                ),
             )
         )
 

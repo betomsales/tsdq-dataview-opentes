@@ -598,8 +598,11 @@
         .attr("class", "network-link")
         .attr("stroke", (item) => item.measurements ? "#8796a5" : "#c4cad1")
         .attr("stroke-width", (item) => item.measurements ? 3.2 : 2.2)
+        .attr("stroke-dasharray", (item) => item.open === true ? "7 5" : null)
         .attr("stroke-linecap", "round")
-        .attr("opacity", 0.82);
+        .attr("opacity", 0.82)
+        .append("title")
+        .text((item) => `${item.id}${typeof item.open === "boolean" ? (item.open ? " · Aberto" : " · Fechado") : ""}`);
 
       const node = nodeLayer
         .selectAll("g")
