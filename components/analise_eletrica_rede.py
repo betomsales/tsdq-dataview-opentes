@@ -736,6 +736,7 @@ def render_analise_eletrica_elemento(
         "Tipo de variável",
         tipos_disponiveis,
         index=indice_padrao,
+        format_func=remover_unidade_do_tipo,
         key=f"{key_prefix}_tipo_variavel",
     )
 

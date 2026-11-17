@@ -261,7 +261,8 @@ if uploaded_file is not None:
 
         tipo_escolhido = st.selectbox(
             "Tipo de variável",
-            tipos_disponiveis
+            tipos_disponiveis,
+            format_func=remover_unidade_do_tipo,
         )
 
         elementos = list(
@@ -318,7 +319,7 @@ if uploaded_file is not None:
                 nome += f"({unidade})"
 
             if not nome:
-                nome = variavel["tipo"]
+                nome = remover_unidade_do_tipo(variavel["tipo"])
 
             opcoes_variaveis.append(nome)
 
