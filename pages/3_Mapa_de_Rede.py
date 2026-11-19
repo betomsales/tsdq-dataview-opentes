@@ -29,6 +29,8 @@ from components.cards_qee import (
 from components.oscilografia import (
     render_oscilografia_no,
 )
+from components.analise_equipamento_rede import render_equipment_analysis
+from modules.network.equipment_view import connected_equipment
 from modules.network.error_handler import (
     friendly_dss_error,
 )
@@ -43,6 +45,7 @@ from modules.network.session_manager import (
     aplicar_selecao_grafo,
     normalizar_indice_instante,
     sincronizar_selecao_barramento,
+    limpar_selecao_equipamento,
 )
 from utils.vinculo_arquivos import (
     calcular_sha256_upload,
@@ -301,11 +304,19 @@ if graph is not None:
                 f"Arquivo principal detectado: {master_file}"
             )
 
-        highlighted_node = st.session_state.get(
+        with st.popover("Elementos do grafo"):
+            show_pv = st.toggle("PVs", value=True, key="network_show_pv")
+            show_load = st.toggle("Cargas", value=True, key="network_show_load")
+
+        equipment_nodes = connected_equipment(graph, show_pv=show_pv, show_load=show_load)
+        selected_equipment_id = st.session_state.get("network_selected_equipment")
+        if selected_equipment_id not in equipment_nodes:
+            st.session_state["network_selected_equipment"] = None
+        highlighted_node = st.session_state.get("network_selected_equipment") or st.session_state.get(
             "network_selected_node"
         )
 
-        if highlighted_node not in graph.nodes:
+        if highlighted_node not in graph.nodes and highlighted_node not in equipment_nodes:
             highlighted_node = None
 
         graph_renderer = st.radio(
@@ -326,11 +337,13 @@ if graph is not None:
                 layout_state=st.session_state.get(
                     "network_d3_layout_state"
                 ),
+                show_pv=show_pv,
+                show_load=show_load,
             )
 
         else:
             clicked_node = render_graph(
-                graph
+                graph, show_pv=show_pv, show_load=show_load,
             )
 
         st.divider()
@@ -341,6 +354,7 @@ if graph is not None:
             graph.nodes,
             max_row_index=len(results_df) - 1 if results_df is not None else None,
             renderer=graph_renderer,
+            equipment=equipment_nodes,
         ):
             st.rerun()
 
@@ -385,7 +399,15 @@ if graph is not None:
             args=(st.session_state,),
         )
 
-        if selected_node:
+        selected_equipment = equipment_nodes.get(st.session_state.get("network_selected_equipment"))
+        if selected_equipment and selected_equipment.bus == selected_node:
+            st.button(
+                "Voltar ao barramento", on_click=limpar_selecao_equipamento,
+                args=(st.session_state,), key="network_back_to_bus",
+            )
+            render_equipment_analysis(graph, selected_equipment, analysis_df, analysis_structure)
+
+        elif selected_node:
             st.session_state["network_selected_node"] = selected_node
 
             aba_inspetor, aba_temporal, aba_qee = st.tabs(

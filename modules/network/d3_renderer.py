@@ -10,6 +10,7 @@ from utils.prodist import obter_limites_prodist
 
 from .cosim_loader import identificar_fases_ausentes
 from .measurement_binding import vincular_medicoes_rede
+from .equipment_view import connected_equipment, equipment_icon, equipment_measurements
 from .topology_styles import (
     get_node_style,
     get_voltage_color,
@@ -41,6 +42,9 @@ def _graph_signature(graph):
         parts.append(
             f"edge:{edge.id}:{edge.source}:{edge.target}:{edge.edge_type}"
         )
+
+    for item in sorted(connected_equipment(graph).values(), key=lambda item: item.id):
+        parts.append(f"equipment:{item.id}:{item.bus}")
 
     raw = "\n".join(parts).encode("utf-8")
 
@@ -75,7 +79,7 @@ def _get_phase_value(phases, keys):
     return None
 
 
-def _graph_to_d3_payload(graph):
+def _graph_to_d3_payload(graph, *, show_pv=True, show_load=True):
 
     nodes = []
     edges = []
@@ -158,6 +162,18 @@ def _graph_to_d3_payload(graph):
             "measurements": len(
                 edge_measurements
             ),
+        })
+
+    for item in connected_equipment(graph, show_pv=show_pv, show_load=show_load).values():
+        nodes.append({
+            "id": item.id, "label": item.label, "type": item.kind,
+            "equipment": True, "busId": item.bus, "icon": equipment_icon(item),
+            "borderColor": "#008000" if item.kind == "PVSystem" else "#0066CC",
+            "measurements": len(equipment_measurements(graph, item)),
+        })
+        edges.append({
+            "id": item.id + ":connection", "source": item.bus, "target": item.id,
+            "type": "attachment", "equipment": True, "measurements": 0,
         })
 
     return {
@@ -316,11 +332,13 @@ def render_graph_d3(
     initial_frame_index=0,
     layout_state=None,
     key="network_d3_graph",
+    show_pv=True,
+    show_load=True,
 ):
     """Renderiza o mapa de rede em D3 e retorna o nó clicado."""
 
     payload = _graph_to_d3_payload(
-        graph
+        graph, show_pv=show_pv, show_load=show_load
     )
     payload["graphId"] = _graph_signature(
         graph

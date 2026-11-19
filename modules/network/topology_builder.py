@@ -255,4 +255,20 @@ def build_graph(dss):
         dss,
     )
 
+    # Keep devices attached to buses; they are not electrical graph vertices.
+    for kind, collection in (("PVSystem", dss.PVsystems), ("Load", dss.Loads)):
+        if not collection.First():
+            continue
+        while True:
+            bus = dss.CktElement.BusNames()[0].split(".")[0].lower()
+            if bus in graph.nodes:
+                record = {
+                    "type": kind, "name": collection.Name(), "bus": bus,
+                    "nodes": [number for number in dss.CktElement.NodeOrder()[:dss.CktElement.NumConductors()] if number > 0],
+                    "phases": dss.CktElement.NumPhases(),
+                }
+                graph.nodes[bus].metadata.setdefault("connected_elements", []).append(record)
+            if collection.Next() == 0:
+                break
+
     return graph

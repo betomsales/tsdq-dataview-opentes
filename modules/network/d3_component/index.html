@@ -410,6 +410,8 @@
       <span><i class="warn"></i>Precário</span>
       <span><i class="bad"></i>Crítico</span>
       <span><i class="empty"></i>Fase ausente / sem medição</span>
+      <span>Painel: PV</span>
+      <span>Triângulo: carga</span>
     </div>
   </div>
 
@@ -471,6 +473,8 @@
     let restoredLayout = false;
     let lastServerFrameIndex = null;
     let isPlaying = false;
+    let lastAppliedFrameIndex = null;
+    let zoomTransform = null;
     const phases = ["A", "B", "C"];
 
     window.addEventListener("message", (event) => {
@@ -500,14 +504,34 @@
       }
 
       const graphData = args.graph_data || { nodes: [], edges: [], frames: [] };
-      nodes = (graphData.nodes || []).map((item) => ({ ...item }));
-      links = (graphData.edges || []).map((item) => ({ ...item }));
+      const incomingNodes = graphData.nodes || [];
+      const incomingLinks = graphData.edges || [];
+      const sameView = graphId === graphData.graphId
+        && incomingNodes.length === nodes.length
+        && incomingNodes.every((item, index) => item.id === nodes[index].id)
+        && incomingLinks.length === links.length
+        && incomingLinks.every((item, index) => item.id === links[index].id);
+      if (sameView) {
+        incomingNodes.forEach((item, index) => Object.assign(nodes[index], item));
+        incomingLinks.forEach(({source, target, ...fields}, index) => Object.assign(links[index], fields));
+      } else {
+        if (simulation) simulation.stop();
+        nodes = incomingNodes.map((item) => ({ ...item }));
+        links = (graphData.edges || []).map((item) => ({ ...item }));
+      }
       frames = graphData.frames || [];
       voltageLimits = graphData.voltageLimits || null;
+      if (graphId !== graphData.graphId) {
+        zoomTransform = null;
+        lastServerFrameIndex = null;
+        lastAppliedFrameIndex = null;
+      }
       graphId = graphData.graphId || "network";
       const shouldResumeTimeline = timerId !== null || isStoredPlaybackActive();
-      stopTimeline({ persist: false });
-      restoredLayout = restoreLayout(graphData.layoutState);
+      if (!sameView) {
+        stopTimeline({ persist: false });
+        restoredLayout = restoreLayout(graphData.layoutState);
+      }
       const lastFrame = Math.max(frames.length - 1, 0);
       const incomingFrameIndex = clampFrameIndex(
         graphData.initialFrame,
@@ -515,7 +539,7 @@
       );
       const keepLocalFrame = (
         lastServerFrameIndex !== null
-        && incomingFrameIndex === lastServerFrameIndex
+        && (incomingFrameIndex === lastServerFrameIndex || incomingFrameIndex === lastAppliedFrameIndex)
       );
       frameIndex = keepLocalFrame
         ? clampFrameIndex(frameIndex, lastFrame)
@@ -526,9 +550,12 @@
 
       stage.style.height = `${height}px`;
       svgElement.style.height = `${height}px`;
-      status.textContent = `${nodes.length} barramentos / ${links.length} elementos`;
+      const busCount = nodes.filter((item) => !item.equipment).length;
+      const edgeCount = links.filter((item) => !item.equipment).length;
+      status.textContent = `${busCount} barramentos / ${edgeCount} conexões / ${nodes.length - busCount} equipamentos`;
       info.hidden = true;
-      drawGraph(height);
+      if (!sameView) drawGraph(height);
+      refreshLinks();
       setupTimeline();
 
       if (frames.length > 0) {
@@ -556,6 +583,8 @@
 
       const width = Math.max(root.getBoundingClientRect().width || 960, 320);
       const appliedTopologyCoordinates = !restoredLayout && applyTopologyCoordinates(width, height);
+      positionEquipment();
+      if (appliedTopologyCoordinates) settleEquipment();
       const svg = d3
         .select(svgElement)
         .attr("viewBox", [0, 0, width, height])
@@ -566,13 +595,21 @@
       const linkLayer = layer.append("g").attr("class", "links");
       const nodeLayer = layer.append("g").attr("class", "nodes");
 
-      svg.call(
-        d3.zoom()
+      const zoom = d3.zoom()
           .scaleExtent([0.25, 3])
           .on("zoom", (event) => {
             layer.attr("transform", event.transform);
-          })
-      );
+            zoomTransform = event.transform;
+          });
+      svg.call(zoom);
+      if (!zoomTransform && nodes.length && nodes.every((item) => Number.isFinite(item.x) && Number.isFinite(item.y))) {
+        const x = d3.extent(nodes, (item) => item.x);
+        const y = d3.extent(nodes, (item) => item.y);
+        const scale = Math.min(width / (x[1] - x[0] + 120), height / (y[1] - y[0] + 120), 1);
+        zoomTransform = d3.zoomIdentity.translate(width / 2, height / 2)
+          .scale(scale).translate(-(x[0] + x[1]) / 2, -(y[0] + y[1]) / 2);
+      }
+      if (zoomTransform) svg.call(zoom.transform, zoomTransform);
 
       simulation = d3
         .forceSimulation(nodes)
@@ -580,7 +617,7 @@
           "link",
           d3.forceLink(links)
             .id((item) => item.id)
-            .distance((item) => item.measurements ? 88 : 74)
+            .distance((item) => item.equipment ? 65 : item.measurements ? 88 : 74)
             .strength(0.75)
         )
         .force("charge", d3.forceManyBody().strength(-245))
@@ -596,13 +633,9 @@
         .data(links)
         .join("line")
         .attr("class", "network-link")
-        .attr("stroke", (item) => item.measurements ? "#8796a5" : "#c4cad1")
-        .attr("stroke-width", (item) => item.measurements ? 3.2 : 2.2)
-        .attr("stroke-dasharray", (item) => item.open === true ? "7 5" : null)
         .attr("stroke-linecap", "round")
         .attr("opacity", 0.82)
-        .append("title")
-        .text((item) => `${item.id}${typeof item.open === "boolean" ? (item.open ? " · Aberto" : " · Fechado") : ""}`);
+        .append("title");
 
       const node = nodeLayer
         .selectAll("g")
@@ -615,6 +648,7 @@
           saveLayout();
           renderInfo(item);
           refreshSelection();
+          if (item.equipment) applySelectedNode(item);
         })
         .on("dblclick", (event, item) => {
           event.stopPropagation();
@@ -624,18 +658,30 @@
           applySelectedNode(item);
         });
 
-      node
+      const buses = node.filter((item) => !item.equipment);
+      const devices = node.filter((item) => item.equipment);
+      buses
         .append("circle")
         .attr("class", "node-fill")
         .attr("r", 18);
 
-      node
+      buses
         .append("circle")
         .attr("class", "node-ring")
         .attr("r", 20)
         .attr("fill", "none")
         .attr("stroke", (item) => item.borderColor)
         .attr("stroke-width", 3.2);
+
+      devices.append("rect")
+        .attr("class", "node-ring")
+        .attr("x", -22).attr("y", -22)
+        .attr("width", 44).attr("height", 44).attr("rx", 4)
+        .attr("fill", "#ffffff").attr("stroke", (item) => item.borderColor);
+      devices.append("image")
+        .attr("href", (item) => item.icon)
+        .attr("x", -18).attr("y", -18).attr("width", 36).attr("height", 36)
+        .attr("pointer-events", "none");
 
       node
         .append("text")
@@ -653,6 +699,15 @@
         .on("end", saveLayout);
 
       updateGraphPositions();
+    }
+
+    function refreshLinks() {
+      d3.select(svgElement).selectAll(".network-link")
+        .attr("stroke", (item) => item.measurements ? "#8796a5" : "#c4cad1")
+        .attr("stroke-width", (item) => item.equipment ? 1.5 : item.measurements ? 3.2 : 2.2)
+        .attr("stroke-dasharray", (item) => item.equipment ? "3 4" : item.open === true ? "7 5" : null)
+        .select("title")
+        .text((item) => item.equipment ? "Conexão do equipamento à barra" : `${item.id}${typeof item.open === "boolean" ? (item.open ? " · Aberto" : " · Fechado") : ""}`);
     }
 
     root
@@ -740,6 +795,7 @@
       );
 
       nodes.forEach((item) => {
+        if (item.equipment) return;
         const frameNode = valuesByNode.get(item.id);
 
         if (!frameNode) {
@@ -822,6 +878,7 @@
     }
 
     function selectionPayload(item) {
+      lastAppliedFrameIndex = frameIndex;
       return {
         id: item.id,
         frameIndex,
@@ -858,7 +915,7 @@
       const extentY = d3.extent(positionedNodes, (item) => item.coord.y);
       const spanX = Math.max(extentX[1] - extentX[0], 1);
       const spanY = Math.max(extentY[1] - extentY[0], 1);
-      const padding = 56;
+      const padding = 96;
       const usableWidth = Math.max(width - padding * 2, 1);
       const usableHeight = Math.max(height - padding * 2, 1);
 
@@ -870,6 +927,43 @@
       });
 
       return true;
+    }
+
+    function positionEquipment() {
+      const byId = new Map(nodes.map((item) => [item.id, item]));
+      const byBus = new Map();
+      nodes.filter((item) => item.equipment).forEach((item) => {
+        const siblings = byBus.get(item.busId) || [];
+        siblings.push(item);
+        byBus.set(item.busId, siblings);
+      });
+      byBus.forEach((items, busId) => {
+        const bus = byId.get(busId);
+        if (!bus || !Number.isFinite(bus.x) || !Number.isFinite(bus.y)) return;
+        items.forEach((item, index) => {
+          if (Number.isFinite(item.x) && Number.isFinite(item.y)) return;
+          const angle = -Math.PI / 2 + index * 2 * Math.PI / items.length;
+          const distance = 74 + 20 * Math.floor(index / 6);
+          item.x = bus.x + Math.cos(angle) * distance;
+          item.y = bus.y + Math.sin(angle) * distance;
+          item.vx = 0;
+          item.vy = 0;
+        });
+      });
+    }
+
+    function settleEquipment() {
+      // Relax only the attachments; the electrical buses keep their coordinates.
+      const anchors = nodes.filter((item) => !item.equipment)
+        .map((item) => ({item, fx: item.fx, fy: item.fy}));
+      anchors.forEach(({item}) => { item.fx = item.x; item.fy = item.y; });
+      const relaxation = d3.forceSimulation(nodes)
+        .force("link", d3.forceLink(links.filter((item) => item.equipment))
+          .id((item) => item.id).distance(78).strength(0.25))
+        .force("collide", d3.forceCollide().radius((item) => item.equipment ? 39 : 31).iterations(4))
+        .stop();
+      for (let i = 0; i < 160; i++) relaxation.tick();
+      anchors.forEach(({item, fx, fy}) => { item.fx = fx; item.fy = fy; });
     }
     function restoreLayout(serverLayoutState) {
       const localLayoutState = readJsonStorage(storageKey("layout"));
@@ -908,11 +1002,12 @@
     }
 
     function saveLayout() {
+      const previous = readJsonStorage(storageKey("layout"));
       writeJsonStorage(
         storageKey("layout"),
         {
           graphId,
-          positions: currentPositions(),
+          positions: { ...(previous && previous.positions || {}), ...currentPositions() },
         }
       );
     }
@@ -1047,6 +1142,7 @@
       const node = d3.select(svgElement).selectAll(".network-node");
 
       node.each(function(item) {
+        if (item.equipment) return;
         const group = d3.select(this);
         const circle = group.select(".node-fill");
         const phasePaths = group
@@ -1095,6 +1191,7 @@
     }
 
     function tooltipText(item) {
+      if (item.equipment) return `${item.label}\nBarra: ${item.busId}\nMedições: ${item.measurements}`;
       const values = phases
         .map((phase) => {
           return `${phase}: ${phaseText(item, phase)}`;
@@ -1105,6 +1202,17 @@
     }
 
     function renderInfo(item) {
+      if (item.equipment) {
+        info.hidden = false;
+        info.innerHTML = `
+          <div class="network-d3-card-title">${escapeHtml(item.label)}</div>
+          <div class="network-d3-card-sub">Barra ${escapeHtml(item.busId)}</div>
+          <div class="network-d3-card-actions">
+            <button type="button" class="network-d3-action" data-apply-node>Analisar equipamento</button>
+          </div>`;
+        info.querySelector("[data-apply-node]").addEventListener("click", () => applySelectedNode(item));
+        return;
+      }
       const rows = phases
         .map((phase) => {
           return `<span>${phase}</span><strong>${phaseText(item, phase)}</strong>`;
@@ -1302,15 +1410,16 @@
 
     function drag(activeSimulation) {
       function dragstarted(event) {
-        if (!event.active) {
-          activeSimulation.alphaTarget(0.3).restart();
-        }
-
+        event.subject.dragMoved = false;
         event.subject.fx = event.subject.x;
         event.subject.fy = event.subject.y;
       }
 
       function dragged(event) {
+        if (!event.subject.dragMoved) {
+          event.subject.dragMoved = true;
+          activeSimulation.alphaTarget(0.3).restart();
+        }
         event.subject.fx = event.x;
         event.subject.fy = event.y;
       }
@@ -1326,6 +1435,7 @@
       }
 
       return d3.drag()
+        .clickDistance(5)
         .on("start", dragstarted)
         .on("drag", dragged)
         .on("end", dragended);

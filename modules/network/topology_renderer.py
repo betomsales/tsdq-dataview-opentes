@@ -16,10 +16,12 @@ from .topology_styles import (
 from .d3_renderer import (
     render_graph_d3,
 )
+from .equipment_view import connected_equipment, equipment_icon
 
 
 def render_graph(
     graph,
+    *, show_pv=True, show_load=True,
 ):
 
     nodes = []
@@ -75,6 +77,16 @@ def render_graph(
                 ),
             )
         )
+
+    for item in connected_equipment(graph, show_pv=show_pv, show_load=show_load).values():
+        nodes.append(Node(
+            id=item.id, label=item.label, size=18, shape="image", image=equipment_icon(item),
+            title=f"{item.label} - Barra {graph.nodes[item.bus].label}",
+        ))
+        edges.append(Edge(
+            source=item.bus, target=item.id, width=1.5, dashes=True, color="#8796a5",
+            title="Conexão do equipamento à barra",
+        ))
 
     config = Config(
         width="100%",
