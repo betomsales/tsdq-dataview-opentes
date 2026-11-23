@@ -155,6 +155,8 @@
 
     .network-d3-card-grid strong {
       text-align: right;
+      min-width: 0;
+      overflow-wrap: anywhere;
     }
 
     .network-d3-osc {
@@ -293,6 +295,11 @@
       background: #d9d9d9;
     }
 
+    .network-d3-legend .unmeasured {
+      background: repeating-linear-gradient(135deg, #f8faf9 0 3px, #87968d 3px 4px);
+      border: 1px solid #87968d;
+    }
+
     .network-d3-root {
       font-family: "Poppins", sans-serif;
       color: #23342d;
@@ -409,7 +416,8 @@
       <span><i class="ok"></i>Adequado</span>
       <span><i class="warn"></i>Precário</span>
       <span><i class="bad"></i>Crítico</span>
-      <span><i class="empty"></i>Fase ausente / sem medição</span>
+      <span><i class="empty"></i>Fase ausente</span>
+      <span><i class="unmeasured"></i>Sem medição em pu</span>
       <span>Painel: PV</span>
       <span>Triângulo: carga</span>
     </div>
@@ -590,6 +598,13 @@
         .attr("viewBox", [0, 0, width, height])
         .attr("width", "100%")
         .attr("height", height);
+
+      const pattern = svg.append("defs").append("pattern")
+        .attr("id", "phase-unmeasured").attr("patternUnits", "userSpaceOnUse")
+        .attr("width", 6).attr("height", 6).attr("patternTransform", "rotate(45)");
+      pattern.append("rect").attr("width", 6).attr("height", 6).attr("fill", "#f8faf9");
+      pattern.append("line").attr("x1", 0).attr("y1", 0).attr("x2", 0).attr("y2", 6)
+        .attr("stroke", "#87968d").attr("stroke-width", 2);
 
       const layer = svg.append("g");
       const linkLayer = layer.append("g").attr("class", "links");
@@ -1057,13 +1072,36 @@
     }
 
     function phaseIsAbsent(item, phase) {
+      if (Array.isArray(item.presentPhases)) return !item.presentPhases.includes(phase);
       return (item.absentPhases || []).includes(phase);
+    }
+
+    function phaseConfiguration(item) {
+      if (!Array.isArray(item.presentPhases)) return "Configuração não informada";
+      return ({1: "Monofásica", 2: "Bifásica", 3: "Trifásica"})[item.presentPhases.length] || "Configuração não informada";
+    }
+
+    function phaseFill(item, phase) {
+      if (phaseIsAbsent(item, phase)) return "#D9D9D9";
+      const value = item.phases[phase];
+      return Number.isFinite(value) ? colorFor(value, item.baseColor) : "url(#phase-unmeasured)";
     }
 
     function phaseText(item, phase) {
       const value = item.phases[phase];
-      const text = Number.isFinite(value) ? `${value.toFixed(4)} pu` : "sem medição";
-      return phaseIsAbsent(item, phase) ? `ausente (${text})` : text;
+      if (phaseIsAbsent(item, phase)) {
+        return Array.isArray(item.presentPhases) ? "fase inexistente" : "ausência inferida pela série NaN";
+      }
+      if (!Number.isFinite(value)) {
+        return Array.isArray(item.presentPhases)
+          ? "existente - sem medição em pu" : "sem medição em pu; presença não informada";
+      }
+      let state = "";
+      if (voltageLimits) {
+        state = value < voltageLimits.critico_min || value > voltageLimits.critico_max ? "crítica"
+          : value >= voltageLimits.adequado_min && value <= voltageLimits.adequado_max ? "adequada" : "precária";
+      }
+      return `${value.toFixed(4)} pu${state ? ` - ${state}` : ""}`;
     }
 
     function numericValues(item) {
@@ -1170,13 +1208,13 @@
             (exit) => exit.remove()
           )
           .attr("d", d3.arc().innerRadius(0).outerRadius(18))
-          .attr("fill", (phaseItem) => phaseIsAbsent(item, phaseItem.data.phase)
-            ? "#D9D9D9"
-            : colorFor(phaseItem.data.value, item.baseColor));
+          .attr("fill", (phaseItem) => phaseFill(item, phaseItem.data.phase));
 
         circle
           .attr("display", mode === "three" ? "none" : null)
-          .attr("fill", colorFor(nodeValue(item, mode), item.baseColor));
+          .attr("fill", phases.includes(mode) ? phaseFill(item, mode)
+            : Number.isFinite(nodeValue(item, mode)) ? colorFor(nodeValue(item, mode), item.baseColor)
+            : "url(#phase-unmeasured)");
       });
     }
 
@@ -1198,7 +1236,7 @@
         })
         .join(" | ");
 
-      return `${item.label} (${item.id})\n${values}\nMedições: ${item.measurements}`;
+      return `${item.label} (${item.id})\n${phaseConfiguration(item)}\n${values}\nMedições: ${item.measurements}`;
     }
 
     function renderInfo(item) {
@@ -1222,7 +1260,7 @@
       info.hidden = false;
       info.innerHTML = `
         <div class="network-d3-card-title">${escapeHtml(item.label)}</div>
-        <div class="network-d3-card-sub">${escapeHtml(item.type)} · ${escapeHtml(item.id)}</div>
+        <div class="network-d3-card-sub">${escapeHtml(item.type)} · ${escapeHtml(item.id)} · ${phaseConfiguration(item)}</div>
         <div class="network-d3-card-grid">${rows}</div>
         <div class="network-d3-osc" data-osc></div>
         <div class="network-d3-card-actions">

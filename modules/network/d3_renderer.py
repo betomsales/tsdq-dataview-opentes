@@ -11,6 +11,7 @@ from utils.prodist import obter_limites_prodist
 from .cosim_loader import identificar_fases_ausentes
 from .measurement_binding import vincular_medicoes_rede
 from .equipment_view import connected_equipment, equipment_icon, equipment_measurements
+from .phase_display import present_phases
 from .topology_styles import (
     get_node_style,
     get_voltage_color,
@@ -47,6 +48,8 @@ def _graph_signature(graph):
         parts.append(f"equipment:{item.id}:{item.bus}")
 
     raw = "\n".join(parts).encode("utf-8")
+    if graph.metadata.get("timeline_id"):
+        raw += str(graph.metadata["timeline_id"]).encode("utf-8")
 
     return hashlib.sha256(
         raw
@@ -144,6 +147,7 @@ def _graph_to_d3_payload(graph, *, show_pv=True, show_load=True):
                 ),
             },
             "absentPhases": node.metadata.get("absent_voltage_phases", []),
+            "presentPhases": present_phases(node),
         })
 
     for edge in graph.edges.values():
@@ -315,7 +319,7 @@ def build_d3_temporal_frames(
             "label": _format_time_label(
                 time_values,
                 row_index,
-            ),
+            ) + (" h" if graph.metadata.get("time_unit") == "h" else ""),
             "nodes": frame_nodes,
         })
 

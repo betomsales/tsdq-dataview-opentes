@@ -2,6 +2,7 @@ import re
 from html import escape
 
 import streamlit as st
+from .phase_display import phase_configuration, phase_details
 
 from utils.estado_geracao import montar_estado_geracao_fv_medicoes
 from utils.rotulos_medicoes import obter_rotulo_variavel
@@ -269,6 +270,7 @@ def _render_card(
     rows=None,
     color="#95a5a6",
     min_height="150px",
+    wrap_values=False,
 ):
     if not rows:
         content = (
@@ -278,6 +280,7 @@ def _render_card(
         )
     else:
         lines = []
+        value_layout = "white-space:normal;overflow-wrap:anywhere;min-width:0;" if wrap_values else "white-space:nowrap;flex-shrink:0;"
 
         for label, value in rows:
             lines.append(
@@ -287,8 +290,7 @@ def _render_card(
                 f"{escape(str(label))}"
                 "</span>"
                 '<span style="font-size:1.15rem;font-weight:bold;'
-                'color:#111827;text-align:right;white-space:nowrap;'
-                'flex-shrink:0;">'
+                f'color:#111827;text-align:right;{value_layout}">'
                 f"{escape(str(value))}"
                 "</span>"
                 "</div>"
@@ -461,6 +463,7 @@ def render_node_details(
 
     info_rows = [
         ("Classe", node_info["titulo"]),
+        ("Configuração", phase_configuration(node)),
         ("Descrição", node_info["descricao"]),
         ("Conexões", len(neighbors)),
     ]
@@ -474,13 +477,7 @@ def render_node_details(
     if "nodes" in node.metadata:
         info_rows.append(("Nós conectados", ", ".join(map(str, node.metadata["nodes"]))))
 
-    voltage_rows = [
-        (
-            phase,
-            f"{voltage_phases[phase]:.6f} pu",
-        )
-        for phase in sorted(voltage_phases)
-    ]
+    voltage_rows = phase_details(node)
 
     if node.voltage_pu is not None:
         voltage_rows.append(
@@ -512,6 +509,7 @@ def render_node_details(
             "Tensão da Barra",
             voltage_rows,
             "#f1c40f",
+            wrap_values=True,
         )
 
     with col_neighbors:

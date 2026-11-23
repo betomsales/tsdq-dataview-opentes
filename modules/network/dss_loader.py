@@ -12,14 +12,19 @@ import opendssdirect as dss
 # EXTRAÇÃO DO ZIP
 # =====================================================
 
-def extract_zip(zip_file):
+def extract_zip(zip_file, directory=None):
 
-    temp_dir = tempfile.mkdtemp()
+    temp_dir = directory or tempfile.mkdtemp()
 
     with zipfile.ZipFile(
         zip_file,
         "r"
     ) as z:
+
+        root = Path(temp_dir).resolve()
+        for entry in z.infolist():
+            if not (root / entry.filename.replace("\\", "/")).resolve().is_relative_to(root):
+                raise ValueError("O ZIP contém um caminho fora da pasta do circuito.")
 
         z.extractall(temp_dir)
 
@@ -41,7 +46,7 @@ def normalize_dss_redirects(root):
                 f.name.lower()
             ] = f.name
 
-    for dss_file in root.rglob("*.dss"):
+    for dss_file in (path for path in root.rglob("*") if path.is_file() and path.suffix.lower() == ".dss"):
 
         content = dss_file.read_text(
             encoding="latin1"
@@ -100,7 +105,7 @@ def normalize_dss_redirects(root):
 def find_master(root):
 
     dss_files = list(
-        root.rglob("*.dss")
+        path for path in root.rglob("*") if path.is_file() and path.suffix.lower() == ".dss"
     )
 
     if not dss_files:
@@ -231,12 +236,13 @@ def sanitize_master(master_file):
 # COMPILAÇÃO
 # =====================================================
 
-def compile_circuit(zip_file):
+def compile_circuit(zip_file, *, engine=None, directory=None):
 
     original_cwd = os.getcwd()
+    engine = engine if engine is not None else dss
 
     root = extract_zip(
-        zip_file
+        zip_file, directory
     )
 
     normalize_dss_redirects(
@@ -251,13 +257,13 @@ def compile_circuit(zip_file):
         original_master
     )
 
-    dss.Basic.ClearAll()
+    engine.Basic.ClearAll()
 
     warning_message = None
 
     try:
 
-        dss.Text.Command(
+        engine.Text.Command(
             f'Compile "{sanitized_master}"'
         )
 
@@ -275,11 +281,19 @@ def compile_circuit(zip_file):
 
     try:
 
-        buses = dss.Circuit.AllBusNames()
+        buses = engine.Circuit.AllBusNames()
 
     except Exception:
 
         pass
+
+    if len(buses) == 0:
+
+        try:
+            engine.Text.Command("MakeBusList")
+            buses = engine.Circuit.AllBusNames()
+        except Exception:
+            pass
 
     if len(buses) == 0:
 
@@ -290,7 +304,7 @@ def compile_circuit(zip_file):
         )
 
     return {
-        "dss": dss,
+        "dss": engine,
         "master_file": original_master.name,
         "warning": warning_message,
     }

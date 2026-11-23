@@ -1,14 +1,6 @@
 import streamlit as st
 from components.identidade import BASE_DIR, apply_brand_style, render_page_header
 
-from modules.network.dss_loader import (
-    compile_circuit,
-)
-
-from modules.network.topology_builder import (
-    build_graph,
-)
-
 from modules.network.topology_renderer import (
     render_graph,
     render_graph_d3,
@@ -30,6 +22,7 @@ from components.oscilografia import (
     render_oscilografia_no,
 )
 from components.analise_equipamento_rede import render_equipment_analysis
+from components.entrada_zip import render_zip_results
 from modules.network.equipment_view import connected_equipment
 from modules.network.error_handler import (
     friendly_dss_error,
@@ -40,7 +33,6 @@ from modules.network.cosim_loader import (
     load_topology_json,
     prepare_node_time_series,
 )
-from io import BytesIO
 from modules.network.session_manager import (
     aplicar_selecao_grafo,
     normalizar_indice_instante,
@@ -232,23 +224,18 @@ elif input_mode == "Circuito OpenDSS (.zip)":
 
         try:
 
-            uploaded_zip = BytesIO(
-                st.session_state["network_zip"]
-            )
-
-            result = compile_circuit(
-                uploaded_zip
-            )
-
-            dss = result["dss"]
-
-            master_file = result["master_file"]
-
-            warning_message = result["warning"]
-
-            graph = build_graph(
-                dss
-            )
+            zip_result = render_zip_results(st.session_state["network_zip"])
+            graph = zip_result["graph"]
+            master_file = zip_result["master_file"]
+            results_df = zip_result.get("results_df")
+            measurement_columns = zip_result.get("measurement_columns")
+            time_values = zip_result.get("time_values")
+            selected_row = zip_result.get("selected_row")
+            snapshot_caption = zip_result.get("snapshot_caption")
+            measurement_stats = zip_result.get("measurement_stats")
+            measured_nodes = measurement_stats["measured_nodes"] if measurement_stats else 0
+            analysis_df = zip_result.get("analysis_df")
+            analysis_structure = zip_result.get("analysis_structure")
 
         except Exception as e:
 
@@ -277,7 +264,7 @@ if graph is not None:
             st.caption(
                 f"Barramentos com medições: {measured_nodes} de {graph.total_nodes}. "
                 "Verde: adequado; amarelo: precário; vermelho: crítico; "
-                "cinza: fase ausente ou sem medição."
+                "cinza no D3: fase ausente; hachuras: sem medição em pu."
             )
 
             st.caption(
@@ -480,8 +467,9 @@ if graph is not None:
                 else:
 
                     st.info(
-                        "A análise temporal está disponível para entradas "
-                        "JSON + CSV validadas por hash."
+                        "Não há séries temporais compatíveis nos monitores do circuito."
+                        if input_mode == "Circuito OpenDSS (.zip)" else
+                        "A análise temporal está disponível para entradas JSON + CSV validadas por hash."
                     )
 
             with aba_qee:
@@ -502,8 +490,9 @@ if graph is not None:
                 else:
 
                     st.info(
-                        "Os dados de qualidade energética estão disponíveis "
-                        "para entradas JSON + CSV validadas por hash."
+                        "Não há séries temporais compatíveis nos monitores do circuito."
+                        if input_mode == "Circuito OpenDSS (.zip)" else
+                        "Os dados de qualidade energética estão disponíveis para entradas JSON + CSV validadas por hash."
                     )
 
         else:

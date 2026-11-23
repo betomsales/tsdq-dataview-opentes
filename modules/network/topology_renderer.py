@@ -17,6 +17,7 @@ from .d3_renderer import (
     render_graph_d3,
 )
 from .equipment_view import connected_equipment, equipment_icon
+from .phase_display import phase_configuration, phase_details
 
 
 def render_graph(
@@ -56,6 +57,8 @@ def render_graph(
                     f"{node.label}: {node.voltage_pu:.6f} pu"
                     if node.voltage_pu is not None
                     else f"{node.label}: sem medição"
+                ) + "\nConfiguração: " + phase_configuration(node) + "\n" + "\n".join(
+                    f"{phase}: {text}" for phase, text in phase_details(node)
                 ),
 
                 borderWidth=6,
